@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: gamehub-api
+    runtime: node
+    region: singapore
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: PORT
+        value: 10000
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: ""
+      - key: CLIENT_URL
+        value: ""
+      - key: AI_PROVIDER
+        value: qwen
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_API_BASE_URL
+        value: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+      - key: AI_MODEL
+        value: qwen3.5-flash

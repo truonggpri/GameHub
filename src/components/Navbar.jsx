@@ -116,6 +116,19 @@ export default function Navbar() {
           )}
           {['admin', 'mod'].includes(user?.role) && <NavLink to="/add-game" active={isActive('/add-game')}>{t('nav.addGame')}</NavLink>}
           {['admin', 'mod'].includes(user?.role) && <NavLink to="/admin" active={isActive('/admin')}>{t('nav.admin')}</NavLink>}
+          
+          {/* GameHub Exclusive Link */}
+          <div className="relative">
+            <NavLink to="/exclusive" active={isActive('/exclusive')}>
+              <span className="flex items-center gap-1">
+                <span>👑</span>
+                <span className="hidden md:inline">Exclusive</span>
+              </span>
+            </NavLink>
+            <span className="absolute -top-2 -right-1 px-1.5 py-0.5 rounded-full text-[7px] font-black bg-gradient-to-r from-yellow-400 to-orange-500 text-white border border-yellow-300/50">
+              NEW
+            </span>
+          </div>
         </div>
 
         <div className="h-6 w-px bg-gradient-to-b from-transparent via-white/30 to-transparent mx-2" />

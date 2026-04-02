@@ -500,6 +500,102 @@ const resources = {
         viewMembership: 'View Membership',
         tryAgain: 'Try Again',
         cancelledMessage: 'You have cancelled the payment. Your account has not been charged.'
+      },
+      snakeArena: {
+        title: 'SNAKE ARENA',
+        subtitle: 'Classic snake game with multiple modes',
+        score: 'Score',
+        highScore: 'High Score',
+        level: 'Level',
+        gameOver: 'GAME OVER',
+        finalScore: 'Final Score',
+        play: 'Play Game',
+        playAgain: 'Play Again',
+        backToMenu: 'Menu',
+        back: 'Back',
+        instructions: 'How to Play',
+        paused: 'Paused',
+        resume: 'Resume',
+        pressSpace: 'Press Space to continue',
+        newHighScore: 'New High Score!',
+        gotIt: 'Got it!',
+        modes: {
+          title: 'Game Modes',
+          classic: 'Classic',
+          arena: 'Arena',
+          endless: 'Endless',
+          ai: '🤖 AI Battle'
+        },
+        modeDesc: {
+          classic: 'Traditional snake - avoid walls and yourself',
+          arena: 'Battle arena with walls and obstacles',
+          endless: 'Wrap-around mode - snake appears on opposite side',
+          ai: 'Compete against 3 AI snakes - last survivor wins!'
+        },
+        controls: {
+          title: 'Controls',
+          move: 'Use WASD or Arrow Keys to move'
+        },
+        howToPlay: {
+          goal: 'Objective',
+          eat: 'Eat red apples to grow and increase your score'
+        },
+        powerups: 'Power-ups',
+        powerup: {
+          speed: 'Speed Boost',
+          slow: 'Slow Motion',
+          ghost: 'Ghost Mode',
+          double: 'Double Points'
+        },
+        rankings: 'Final Rankings',
+        winner: 'Winner',
+        you: 'You',
+        aiPlayer: 'AI {{number}}'
+      },
+      pokemonGame: {
+        title: 'POKEMON BATTLE',
+        subtitle: 'Classic Pokemon battle experience',
+        selectPokemon: 'Select Your Pokemon',
+        clickToSelect: 'Click on a Pokemon to select',
+        battle: {
+          yourTurn: '🎯 Your Turn',
+          aiThinking: '⏳ Opponent thinking...',
+          battleLog: 'Battle Log',
+          effectiveness: {
+            super: 'Super effective!',
+            notVery: 'Not very effective...',
+            heal: 'Healed {{amount}} HP!',
+            buff: 'Stats increased!'
+          },
+          win: 'VICTORY!',
+          lose: 'DEFEAT',
+          victoryMessage: 'Amazing! {{winner}} defeated {{loser}}!',
+          defeatMessage: '{{loser}} fainted... Try again!',
+          rewards: {
+            xp: '+100 XP',
+            coins: '+50 Coins'
+          }
+        },
+        moves: {
+          attack: '{{power}} PWR',
+          heal: 'Heal HP',
+          buff: 'Boost Stats'
+        },
+        typeChart: {
+          title: 'Type Chart',
+          strong: 'Strong against',
+          weak: 'Weak against'
+        },
+        stats: {
+          wins: 'Wins',
+          losses: 'Losses',
+          total: 'Total'
+        },
+        back: '← Back',
+        playAgain: '🔄 Play Again',
+        backToMenu: '🏠 Back to Menu',
+        startBattle: '🎮 Start Battle',
+        typeChartBtn: '📊 Type Chart'
       }
     }
   },
@@ -1001,6 +1097,102 @@ const resources = {
         viewMembership: 'Xem gói thành viên',
         tryAgain: 'Thử lại',
         cancelledMessage: 'Bạn đã hủy thanh toán. Tài khoản của bạn chưa bị tính phí.'
+      },
+      snakeArena: {
+        title: 'SNAKE ARENA',
+        subtitle: 'Game rắn kinh điển với nhiều chế độ',
+        score: 'Điểm',
+        highScore: 'Điểm cao',
+        level: 'Cấp độ',
+        gameOver: 'KẾT THÚC',
+        finalScore: 'Điểm cuối',
+        play: 'Chơi Game',
+        playAgain: 'Chơi lại',
+        backToMenu: 'Menu',
+        back: 'Quay lại',
+        instructions: 'Hướng dẫn',
+        paused: 'Tạm dừng',
+        resume: 'Tiếp tục',
+        pressSpace: 'Nhấn Space để tiếp tục',
+        newHighScore: 'Điểm cao mới!',
+        gotIt: 'Đã hiểu!',
+        modes: {
+          title: 'Chế độ chơi',
+          classic: 'Cổ điển',
+          arena: 'Đấu trường',
+          endless: 'Vô tận',
+          ai: '🤖 Đấu AI'
+        },
+        modeDesc: {
+          classic: 'Rắn truyền thống - tránh tường và chính mình',
+          arena: 'Đấu trường có tường và chướng ngại vật',
+          endless: 'Chế độ xuyên tường - rắn xuất hiện bên đối diện',
+          ai: 'Đấu với 3 AI - người sống sót cuối cùng thắng!'
+        },
+        controls: {
+          title: 'Điều khiển',
+          move: 'Dùng WASD hoặc phím mũi tên để di chuyển'
+        },
+        howToPlay: {
+          goal: 'Mục tiêu',
+          eat: 'Ăn táo đỏ để lớn lên và tăng điểm'
+        },
+        powerups: 'Vật phẩm',
+        powerup: {
+          speed: 'Tăng tốc',
+          slow: 'Chậm lại',
+          ghost: 'Ma',
+          double: 'Điểm x2'
+        },
+        rankings: 'Bảng xếp hạng',
+        winner: 'Người thắng',
+        you: 'Bạn',
+        aiPlayer: 'AI {{number}}'
+      },
+      pokemonGame: {
+        title: 'POKEMON BATTLE',
+        subtitle: 'Trận chiến Pokemon cổ điển',
+        selectPokemon: 'Chọn Pokemon của bạn',
+        clickToSelect: 'Click vào Pokemon để chọn',
+        battle: {
+          yourTurn: '🎯 Lượt của bạn',
+          aiThinking: '⏳ Đối thủ đang tính toán...',
+          battleLog: 'Nhật ký trận đấu',
+          effectiveness: {
+            super: 'Siêu hiệu quả!',
+            notVery: 'Không hiệu quả lắm...',
+            heal: 'Hồi {{amount}} HP!',
+            buff: 'Chỉ số tăng!'
+          },
+          win: 'CHIẾN THẮNG!',
+          lose: 'THUA CUỘC',
+          victoryMessage: 'Tuyệt vời! {{winner}} đã đánh bại {{loser}}!',
+          defeatMessage: '{{loser}} đã ngất đi... Hãy thử lại!',
+          rewards: {
+            xp: '+100 XP',
+            coins: '+50 Coins'
+          }
+        },
+        moves: {
+          attack: '{{power}} PWR',
+          heal: 'Hồi HP',
+          buff: 'Tăng chỉ số'
+        },
+        typeChart: {
+          title: 'Bảng khắc chế',
+          strong: 'Mạnh với',
+          weak: 'Yếu với'
+        },
+        stats: {
+          wins: 'Thắng',
+          losses: 'Thua',
+          total: 'Tổng'
+        },
+        back: '← Quay lại',
+        playAgain: '🔄 Chơi lại',
+        backToMenu: '🏠 Về menu',
+        startBattle: '🎮 Bắt đầu trận đấu',
+        typeChartBtn: '📊 Bảng khắc chế'
       }
     }
   }

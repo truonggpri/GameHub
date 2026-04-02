@@ -567,7 +567,7 @@ export default function Home() {
             </span>
           </a>
           <a 
-            href="https://github.com" 
+            href="https://github.com/truonggpri/GameHub" 
             target="_blank" 
             rel="noopener noreferrer" 
             className="group relative px-8 py-4 font-bold tracking-wide border-2 border-white/20 rounded-lg overflow-hidden transition-all duration-300 hover:border-purple-500/50 hover:shadow-[0_0_30px_rgba(168,85,247,0.2)] hover-lift-3d"

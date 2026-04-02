@@ -14,6 +14,9 @@ import PaymentSuccess from './pages/PaymentSuccess';
 import PaymentCancel from './pages/PaymentCancel';
 import Support from './pages/Support';
 import SupportChatbot from './components/SupportChatbot';
+import PokemonPage from './pages/PokemonPage';
+import ExclusivePage from './pages/ExclusivePage';
+import SnakeArenaPage from './pages/SnakeArenaPage';
 
 function App() {
   return (
@@ -32,6 +35,9 @@ function App() {
             <Route path="/support" element={<Support />} />
             <Route path="/admin" element={<AdminPanel />} />
             <Route path="/add-game" element={<AddGame />} />
+            <Route path="/exclusive" element={<ExclusivePage />} />
+            <Route path="/pokemon" element={<PokemonPage />} />
+            <Route path="/snake" element={<SnakeArenaPage />} />
             <Route path="/games/play/:id" element={<EmbeddedGame />} />
             <Route path="/games/:id" element={<GameDetail />} />
           </Routes>

@@ -543,6 +543,7 @@ export default function AdminPanel() {
     { key: 'support', label: t('adminSupport.support'), icon: '💬', count: supportTickets.length },
     { key: 'payments', label: 'Payments', icon: '💰', count: paymentStats.awaitingNotification },
     ...(isAdmin ? [{ key: 'logs', label: t('admin.tabs.logs'), icon: '📜', count: auditLogs.length }] : []),
+    { key: 'exclusive', label: 'Exclusive', icon: '👑', count: 1 },
   ];
 
   const supportSortedTickets = useMemo(() => {
@@ -1562,6 +1563,357 @@ export default function AdminPanel() {
             </div>
           </div>
         )}
+        {/* ===== EXCLUSIVE GAMES TAB ===== */}
+        {activeTab === 'exclusive' && <ExclusiveGamesManager />}
+      </div>
+    </div>
+  );
+}
+
+// Exclusive Games Manager Component
+function ExclusiveGamesManager() {
+  const [games, setGames] = useState(() => {
+    const saved = localStorage.getItem('exclusiveGames');
+    return saved ? JSON.parse(saved) : [
+      {
+        id: 'pokemon',
+        name: 'Pokemon Battle',
+        nameVi: 'Đấu Pokemon',
+        icon: '⚡',
+        emoji: '🔥',
+        path: '/pokemon',
+        description: 'Turn-based battle game with 12 unique Pokemon',
+        descriptionVi: 'Game đấu turn-based với 12 Pokemon độc đáo',
+        color: 'from-yellow-400 to-orange-500',
+        features: ['12 Pokemon', 'Type System', 'AI Battle', 'Stats Tracking'],
+        players: 'Single Player',
+        difficulty: 'Medium',
+        isActive: true,
+      },
+      {
+        id: 'snake',
+        name: 'Snake Arena',
+        nameVi: 'Rắn Săn Mồi',
+        icon: '🐍',
+        emoji: '🐍',
+        path: '/snake',
+        description: 'Classic snake game with power-ups and arena modes',
+        descriptionVi: 'Game rắn săn mồi cổ điển với power-ups và chế độ arena',
+        color: 'from-green-400 to-emerald-500',
+        features: ['Power-ups', 'Arena Mode', 'High Scores', '3 Game Modes'],
+        players: 'Single Player',
+        difficulty: 'Easy',
+        isActive: true,
+      }
+    ];
+  });
+  
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [success, setSuccess] = useState('');
+
+  const saveToStorage = (newGames) => {
+    localStorage.setItem('exclusiveGames', JSON.stringify(newGames));
+  };
+
+  const handleEdit = (game) => {
+    setEditingId(game.id);
+    setEditForm({ ...game });
+  };
+
+  const handleSave = () => {
+    setBusy(true);
+    const updated = games.map(g => g.id === editingId ? { ...editForm } : g);
+    setGames(updated);
+    saveToStorage(updated);
+    setEditingId(null);
+    setSuccess('Game updated successfully!');
+    setTimeout(() => setSuccess(''), 3000);
+    setBusy(false);
+  };
+
+  const handleToggleActive = (id) => {
+    const updated = games.map(g => g.id === id ? { ...g, isActive: !g.isActive } : g);
+    setGames(updated);
+    saveToStorage(updated);
+  };
+
+  const handleFeatureChange = (index, value) => {
+    const newFeatures = [...(editForm.features || [])];
+    newFeatures[index] = value;
+    setEditForm({ ...editForm, features: newFeatures });
+  };
+
+  const addFeature = () => {
+    setEditForm({ ...editForm, features: [...(editForm.features || []), ''] });
+  };
+
+  const removeFeature = (index) => {
+    const newFeatures = editForm.features.filter((_, i) => i !== index);
+    setEditForm({ ...editForm, features: newFeatures });
+  };
+
+  return (
+    <div className="space-y-5 animate-fade-up">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <span className="text-yellow-400">👑</span> Exclusive Games
+          </h3>
+          <p className="text-sm text-zinc-500">Manage GameHub exclusive games</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-zinc-500">{games.filter(g => g.isActive).length} active</span>
+        </div>
+      </div>
+
+      {success && (
+        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-2">
+          <span className="text-emerald-400">✅</span>
+          <span className="text-emerald-300 text-sm">{success}</span>
+        </div>
+      )}
+
+      {/* Games List */}
+      <div className="space-y-4">
+        {games.map((game) => (
+          <div
+            key={game.id}
+            className={`rounded-2xl border transition-all duration-200 ${
+              editingId === game.id
+                ? 'border-yellow-500/30 bg-zinc-900/90'
+                : 'border-zinc-800/80 bg-zinc-900/50 hover:border-zinc-700 hover:bg-zinc-900/70'
+            }`}
+          >
+            {editingId === game.id ? (
+              /* ---- EDIT MODE ---- */
+              <div className="p-5 md:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-bold flex items-center gap-2">
+                    <span className="text-yellow-400">✏️</span> Editing: {game.name}
+                  </h4>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Name */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Name (EN)</label>
+                    <input
+                      type="text"
+                      value={editForm.name || ''}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+                    />
+                  </div>
+                  
+                  {/* Name VI */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Name (VI)</label>
+                    <input
+                      type="text"
+                      value={editForm.nameVi || ''}
+                      onChange={(e) => setEditForm({ ...editForm, nameVi: e.target.value })}
+                      className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Description (EN)</label>
+                    <textarea
+                      value={editForm.description || ''}
+                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                      rows={2}
+                      className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-zinc-100 resize-none focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+                    />
+                  </div>
+
+                  {/* Description VI */}
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Description (VI)</label>
+                    <textarea
+                      value={editForm.descriptionVi || ''}
+                      onChange={(e) => setEditForm({ ...editForm, descriptionVi: e.target.value })}
+                      rows={2}
+                      className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-zinc-100 resize-none focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+                    />
+                  </div>
+
+                  {/* Icon & Emoji */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Icon</label>
+                    <input
+                      type="text"
+                      value={editForm.icon || ''}
+                      onChange={(e) => setEditForm({ ...editForm, icon: e.target.value })}
+                      className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+                      placeholder="⚡"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Emoji</label>
+                    <input
+                      type="text"
+                      value={editForm.emoji || ''}
+                      onChange={(e) => setEditForm({ ...editForm, emoji: e.target.value })}
+                      className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+                      placeholder="🔥"
+                    />
+                  </div>
+
+                  {/* Players & Difficulty */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Players</label>
+                    <input
+                      type="text"
+                      value={editForm.players || ''}
+                      onChange={(e) => setEditForm({ ...editForm, players: e.target.value })}
+                      className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Difficulty</label>
+                    <select
+                      value={editForm.difficulty || 'Medium'}
+                      onChange={(e) => setEditForm({ ...editForm, difficulty: e.target.value })}
+                      className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+                    >
+                      <option value="Easy">Easy</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Hard">Hard</option>
+                      <option value="Expert">Expert</option>
+                    </select>
+                  </div>
+
+                  {/* Features */}
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Features</label>
+                    <div className="space-y-2">
+                      {(editForm.features || []).map((feature, idx) => (
+                        <div key={idx} className="flex gap-2">
+                          <input
+                            type="text"
+                            value={feature}
+                            onChange={(e) => handleFeatureChange(idx, e.target.value)}
+                            className="flex-1 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+                            placeholder={`Feature ${idx + 1}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeFeature(idx)}
+                            className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={addFeature}
+                        className="text-sm text-yellow-400 hover:text-yellow-300 font-medium flex items-center gap-1"
+                      >
+                        <span>+</span> Add Feature
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Gradient Color */}
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Card Gradient</label>
+                    <select
+                      value={editForm.color || 'from-yellow-400 to-orange-500'}
+                      onChange={(e) => setEditForm({ ...editForm, color: e.target.value })}
+                      className="w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+                    >
+                      <option value="from-yellow-400 to-orange-500">Yellow → Orange</option>
+                      <option value="from-cyan-400 to-blue-500">Cyan → Blue</option>
+                      <option value="from-purple-400 to-pink-500">Purple → Pink</option>
+                      <option value="from-emerald-400 to-green-500">Emerald → Green</option>
+                      <option value="from-red-400 to-rose-500">Red → Rose</option>
+                      <option value="from-blue-400 to-indigo-500">Blue → Indigo</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 mt-5">
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                    className="px-5 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-sm font-bold hover:bg-zinc-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={busy}
+                    className="px-6 py-2 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-sm font-bold shadow-lg shadow-yellow-500/20 hover:shadow-yellow-500/30 disabled:opacity-50"
+                  >
+                    {busy ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* ---- VIEW MODE ---- */
+              <div className="flex items-center gap-4 p-4">
+                {/* Icon */}
+                <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${game.color} flex items-center justify-center text-3xl shrink-0`}>
+                  {game.emoji}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="font-bold text-white">{game.icon} {game.name}</h4>
+                    {!game.isActive && (
+                      <span className="text-[10px] font-bold text-zinc-400 bg-zinc-700/50 px-1.5 py-0.5 rounded">Inactive</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-zinc-500 line-clamp-1">{game.description}</p>
+                  <div className="flex items-center gap-3 mt-2 text-xs text-zinc-400">
+                    <span>{game.players}</span>
+                    <span>•</span>
+                    <span>{game.difficulty}</span>
+                    <span>•</span>
+                    <span>{game.features?.length || 0} features</span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleToggleActive(game.id)}
+                    className={`p-2 rounded-lg text-sm font-bold border transition-all ${
+                      game.isActive
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/30'
+                        : 'bg-zinc-700 text-zinc-400 border-zinc-600 hover:bg-zinc-600'
+                    }`}
+                    title={game.isActive ? 'Active' : 'Inactive'}
+                  >
+                    {game.isActive ? '✓' : '✗'}
+                  </button>
+                  <button
+                    onClick={() => handleEdit(game)}
+                    className="p-2 rounded-lg bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/30 transition-all"
+                    title="Edit"
+                  >
+                    ✏️
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Info Box */}
+      <div className="p-4 rounded-xl border border-zinc-700/50 bg-zinc-800/30 text-sm text-zinc-400">
+        <p className="flex items-center gap-2">
+          <span>💡</span>
+          Changes are saved to localStorage and will persist across page reloads.
+        </p>
       </div>
     </div>
   );

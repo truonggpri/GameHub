@@ -63,7 +63,7 @@ export default function SupportChatbot() {
       }
 
       const res = await axios.post(
-        'http://localhost:5000/api/ai/chat',
+        `${API_BASE_URL}/ai/chat`,
         { message: content, gameId: currentGameId || undefined },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
@@ -105,7 +105,7 @@ export default function SupportChatbot() {
     setReporting(true);
     try {
       const res = await axios.post(
-        'http://localhost:5000/api/ai/report-issue',
+        `${API_BASE_URL}/ai/report-issue`,
         {
           message: issueText,
           gameId: currentGameId || undefined,

@@ -478,7 +478,7 @@ export default function EmbeddedGame() {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post(
-        'http://localhost:5000/api/ai/recommendations',
+        `${API_BASE_URL}/ai/recommendations`,
         { gameId, limit: 6 },
         token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );

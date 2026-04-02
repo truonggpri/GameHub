@@ -1,10 +1,68 @@
 import { useNavigate, Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import axios from 'axios';
+import Navbar from '../components/Navbar';
+import { useAuth } from '../context/AuthContext';
+import API_BASE_URL from '../config/api';
 
 const ExclusivePage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [scrollY, setScrollY] = useState(0);
+  const [exclusiveGames, setExclusiveGames] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // VIP check - redirect if not VIP
+  useEffect(() => {
+    if (user && user.vipTier !== 'vip') {
+      navigate('/membership');
+    }
+  }, [user, navigate]);
+
+  // Fetch exclusive games from API
+  useEffect(() => {
+    const fetchExclusiveGames = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_BASE_URL}/games/exclusive`);
+        // Map API response to component format
+        const mappedGames = response.data.map(game => ({
+          id: game._id || game.id,
+          name: game.title,
+          nameVi: game.descriptionVi || game.title,
+          path: game.path || `/${game._id || game.id}`,
+          category: game.category,
+          categoryColor: game.category === 'RPG' ? 'from-yellow-400 to-orange-500' :
+                        game.category === 'Arcade' ? 'from-green-400 to-emerald-500' :
+                        game.category === 'Action' ? 'from-red-400 to-pink-500' :
+                        'from-cyan-400 to-blue-500',
+          description: game.description,
+          descriptionVi: game.descriptionVi || game.description,
+          image: game.imageUrl || game.image,
+          tags: game.tags || [],
+          difficulty: game.difficulty || 'Medium',
+          difficultyColor: game.difficulty === 'Easy' ? 'bg-green-400' :
+                          game.difficulty === 'Medium' ? 'bg-yellow-400' :
+                          game.difficulty === 'Hard' ? 'bg-orange-400' :
+                          'bg-red-400',
+          playCount: game.playCount || 0,
+          likeCount: game.likeCount || 0
+        }));
+        setExclusiveGames(mappedGames);
+      } catch (err) {
+        console.error('Error fetching exclusive games:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user?.vipTier === 'vip') {
+      fetchExclusiveGames();
+    }
+  }, [user]);
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -22,38 +80,6 @@ const ExclusivePage = () => {
       window.removeEventListener('mousemove', handleMouseMove);
     };
   }, []);
-
-  // Exclusive games list
-  const exclusiveGames = [
-    {
-      id: 'pokemon',
-      name: 'Pokemon Battle',
-      nameVi: 'Đấu Pokemon',
-      icon: '⚡',
-      emoji: '🔥',
-      path: '/pokemon',
-      description: 'Turn-based battle game with 12 unique Pokemon',
-      descriptionVi: 'Game đấu turn-based với 12 Pokemon độc đáo',
-      color: 'from-yellow-400 to-orange-500',
-      features: ['12 Pokemon', 'Type System', 'AI Battle', 'Stats Tracking'],
-      players: 'Single Player',
-      difficulty: 'Medium'
-    },
-    {
-      id: 'snake',
-      name: 'Snake Arena',
-      nameVi: 'Rắn Săn Mồi',
-      icon: '🐍',
-      emoji: '🐍',
-      path: '/snake',
-      description: 'Classic snake game with power-ups and arena modes',
-      descriptionVi: 'Game rắn săn mồi cổ điển với power-ups và chế độ arena',
-      color: 'from-green-400 to-emerald-500',
-      features: ['Power-ups', 'Arena Mode', 'High Scores', '3 Game Modes'],
-      players: 'Single Player',
-      difficulty: 'Easy'
-    }
-  ];
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white selection:bg-white selection:text-black animate-page-in">
@@ -109,6 +135,11 @@ const ExclusivePage = () => {
         <div className="absolute w-2 h-2 bg-cyan-400/60 rounded-full top-[20%] left-[30%] animate-float-3d" />
         <div className="absolute w-1.5 h-1.5 bg-yellow-400/60 rounded-full top-[40%] right-[25%] animate-float-3d-reverse" />
         <div className="absolute w-2.5 h-2.5 bg-orange-400/50 rounded-full bottom-[30%] left-[40%] animate-float-3d-slow" />
+      </div>
+
+      {/* Navbar */}
+      <div className="relative z-50">
+        <Navbar />
       </div>
 
       {/* Header */}
@@ -178,125 +209,138 @@ const ExclusivePage = () => {
           </div>
         </div>
 
+        {/* Loading State */}
+        {loading && (
+          <div className="flex justify-center items-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400" />
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="text-center py-12">
+            <div className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Failed to load games. Please try again.</span>
+            </div>
+          </div>
+        )}
+
         {/* Games Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {!loading && !error && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {exclusiveGames.map((game, index) => (
             <div
               key={game.id}
               onClick={() => navigate(game.path)}
-              className="group relative rounded-2xl border border-white/10 bg-zinc-900/60 backdrop-blur-sm overflow-hidden cursor-pointer transition-all duration-500 hover:border-yellow-400/50 hover:shadow-[0_0_40px_rgba(251,191,36,0.2)] hover:-translate-y-2 animate-fade-up"
+              className="group relative rounded-2xl border border-white/10 bg-zinc-900/60 backdrop-blur-sm overflow-hidden cursor-pointer transition-all duration-500 hover:border-white/20 hover:shadow-2xl hover:-translate-y-2 animate-fade-up"
               style={{ '--delay': `${200 + index * 100}ms` }}
             >
-              {/* Animated border glow on hover */}
-              <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-                <div className="absolute inset-[-1px] rounded-2xl bg-gradient-to-r from-yellow-500/20 via-orange-500/20 to-pink-500/20 animate-gradient-pan bg-[length:200%_100%]" />
-              </div>
+              {/* Glare overlay */}
+              <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-gradient-to-tr from-white/0 via-white/5 to-white/0 z-10" />
 
-              {/* Card Header */}
-              <div className={`h-40 bg-gradient-to-br ${game.color} relative overflow-hidden`}>
-                {/* Background pattern */}
-                <div className="absolute inset-0 opacity-20">
-                  <div className="absolute top-4 left-4 text-4xl">{game.emoji}</div>
-                  <div className="absolute bottom-4 right-4 text-4xl">{game.emoji}</div>
-                </div>
+              {/* Image Container */}
+              <div className="relative aspect-[4/3] overflow-hidden">
+                <img
+                  src={game.image}
+                  alt={game.name}
+                  className="w-full h-full object-cover transition-all duration-700 group-hover:scale-110"
+                />
+                {/* Gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/20 to-transparent" />
                 
-                {/* Floating animation */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-7xl animate-float-3d drop-shadow-2xl">
-                    {game.emoji}
+                {/* Category Badge */}
+                <div className="absolute top-3 left-3">
+                  <span className={`px-2 py-1 rounded-full text-xs font-bold bg-gradient-to-r ${game.categoryColor} text-black`}>
+                    {game.category}
                   </span>
                 </div>
 
-                {/* Exclusive Badge */}
-                <div className="absolute top-3 right-3 px-3 py-1 rounded-full bg-black/40 backdrop-blur-sm border border-yellow-400/50">
-                  <span className="text-[10px] font-black text-yellow-400 uppercase tracking-wider">Exclusive</span>
+                {/* Exclusive Tag */}
+                <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-500/20 backdrop-blur-sm border border-yellow-500/30">
+                  <span className="text-xs">👑</span>
+                  <span className="text-[10px] font-bold text-yellow-400 uppercase">VIP</span>
                 </div>
               </div>
 
               {/* Card Content */}
-              <div className="p-5 relative">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-xl font-black text-white group-hover:text-yellow-400 transition-colors flex items-center gap-2">
-                      {game.icon} {game.name}
-                    </h3>
-                    <p className="text-sm text-zinc-400">{game.nameVi}</p>
-                  </div>
-                </div>
+              <div className="p-4 relative">
+                {/* Title */}
+                <h3 className="text-lg font-bold text-white group-hover:text-cyan-400 transition-colors mb-1">
+                  {game.name}
+                </h3>
+                
+                {/* Publisher */}
+                <p className="text-xs text-zinc-500 mb-3 flex items-center gap-1">
+                  <span>by</span>
+                  <span className="text-zinc-400 font-medium">GameHub Team</span>
+                </p>
 
-                <p className="text-sm text-zinc-400 mb-4 line-clamp-2">
+                {/* Description */}
+                <p className="text-sm text-zinc-400 mb-3 line-clamp-2">
                   {game.description}
                 </p>
 
-                {/* Features */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {game.features.map((feature, idx) => (
+                {/* Tags */}
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {game.tags.map((tag, idx) => (
                     <span 
                       key={idx}
-                      className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-[10px] font-medium text-zinc-300"
+                      className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-zinc-400"
                     >
-                      {feature}
+                      {tag}
                     </span>
                   ))}
                 </div>
 
-                {/* Meta Info */}
-                <div className="flex items-center gap-4 text-xs text-zinc-500 border-t border-white/10 pt-4">
-                  <span className="flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    {game.players}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                    </svg>
-                    {game.difficulty}
-                  </span>
+                {/* Stats Row */}
+                <div className="flex items-center justify-between text-xs text-zinc-500 mb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {game.playCount.toLocaleString()}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                      {game.likeCount.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className={`w-2 h-2 rounded-full ${game.difficultyColor}`} />
+                    <span>{game.difficulty}</span>
+                  </div>
                 </div>
 
                 {/* Play Button */}
-                <button className="w-full mt-4 py-3 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold text-sm hover:from-yellow-400 hover:to-orange-400 transition-all duration-300 hover:shadow-[0_0_20px_rgba(251,191,36,0.3)] flex items-center justify-center gap-2 group/btn">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(game.path);
+                  }}
+                  className="w-full py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2 group/btn border border-white/10 hover:border-white/20"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span>Play Now</span>
-                  <svg className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                  <span>Chơi ngay</span>
                 </button>
               </div>
             </div>
           ))}
         </div>
+        )}
 
         {/* Coming Soon Section */}
-        <div className="mt-20 text-center animate-fade-up" style={{ '--delay': '400ms' }}>
-          <div className="inline-flex items-center gap-4 px-8 py-4 rounded-2xl border border-white/10 bg-zinc-900/50 backdrop-blur-sm">
-            <span className="text-3xl animate-bounce">🚧</span>
-            <div className="text-left">
-              <p className="text-base font-bold text-white">More Games Coming Soon</p>
-              <p className="text-xs text-zinc-500">Stay tuned for new exclusive experiences</p>
-            </div>
-            <div className="flex gap-1">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" style={{ animationDelay: '0ms' }} />
-              <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" style={{ animationDelay: '200ms' }} />
-              <span className="w-2 h-2 rounded-full bg-pink-400 animate-pulse" style={{ animationDelay: '400ms' }} />
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-white/10 py-8 mt-20">
-        <div className="container mx-auto px-6 text-center">
-          <p className="text-sm text-zinc-500">
-            GameHub Exclusive Collection © 2026
-          </p>
-        </div>
-      </footer>
+      </section>
 
       {/* Styles for animations */}
       <style>{`

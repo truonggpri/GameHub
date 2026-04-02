@@ -358,6 +358,21 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get exclusive games (custom games created by GameHub)
+router.get('/exclusive', async (req, res) => {
+  try {
+    const viewer = await getAuthorizedUser(req);
+    const exclusiveQuery = {
+      ...activeGameQuery,
+      isCustom: true
+    };
+    const games = await Game.find(exclusiveQuery).sort({ createdAt: -1 });
+    res.json(games.map((game) => toGameResponse(game, { viewer })));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.get('/reviews/me', auth, async (req, res) => {
   try {
     const sort = normalizeReviewSort(req.query.sort);

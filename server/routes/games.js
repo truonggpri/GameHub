@@ -358,13 +358,18 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get exclusive games (custom games created by GameHub)
+// Get exclusive games (Pokemon and Snake only)
 router.get('/exclusive', async (req, res) => {
   try {
     const viewer = await getAuthorizedUser(req);
     const exclusiveQuery = {
       ...activeGameQuery,
-      isCustom: true
+      $or: [
+        { path: '/pokemon' },
+        { path: '/snake' },
+        { title: { $regex: /^pokemon$/i } },
+        { title: { $regex: /^snake$/i } }
+      ]
     };
     const games = await Game.find(exclusiveQuery).sort({ createdAt: -1 });
     res.json(games.map((game) => toGameResponse(game, { viewer })));

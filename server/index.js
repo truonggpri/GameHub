@@ -20,7 +20,10 @@ const allowedOrigins = [
   // Vercel domains  
   /^https:\/\/.+\.vercel\.app$/,
   // Render domains
-  /^https:\/\/.+\.onrender\.com$/
+  /^https:\/\/.+\.onrender\.com$/,
+  // Additional wildcards for your specific domains
+  /^https:\/\/gamehub.*\.vercel\.app$/,
+  /^https:\/\/gamehub.*\.netlify\.app$/
 ].filter(Boolean);
 
 app.use(cors({

@@ -1,0 +1,372 @@
+[0m[0m
+[0m[4mD:\code\GameHub\server\index.js[24m[0m
+[0m    [2m1:17[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m    [2m2:18[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m    [2m3:14[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m    [2m4:16[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m    [2m5:14[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m    [2m6:14[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m    [2m7:14[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m   [2m10:26[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m   [2m19:3[22m   [31merror[39m  'process' is not defined    [2mno-undef[22m[0m
+[0m   [2m20:3[22m   [31merror[39m  'process' is not defined    [2mno-undef[22m[0m
+[0m   [2m48:46[22m  [31merror[39m  '__dirname' is not defined  [2mno-undef[22m[0m
+[0m   [2m62:18[22m  [31merror[39m  'process' is not defined    [2mno-undef[22m[0m
+[0m   [2m78:25[22m  [31merror[39m  'process' is not defined    [2mno-undef[22m[0m
+[0m   [2m91:8[22m   [31merror[39m  'process' is not defined    [2mno-undef[22m[0m
+[0m   [2m94:15[22m  [31merror[39m  'process' is not defined    [2mno-undef[22m[0m
+[0m  [2m120:22[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m  [2m121:23[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m  [2m122:24[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m  [2m123:23[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m  [2m124:20[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m  [2m125:25[22m  [31merror[39m  'require' is not defined    [2mno-undef[22m[0m
+[0m  [2m136:14[22m  [31merror[39m  'process' is not defined    [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\models\AuditLog.js[24m[0m
+[0m   [2m1:18[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m  [2m20:1[22m   [31merror[39m  'module' is not defined   [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\models\Game.js[24m[0m
+[0m   [2m1:18[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m  [2m31:1[22m   [31merror[39m  'module' is not defined   [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\models\GameComment.js[24m[0m
+[0m   [2m1:18[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m  [2m22:1[22m   [31merror[39m  'module' is not defined   [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\models\Payment.js[24m[0m
+[0m   [2m1:18[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m  [2m41:1[22m   [31merror[39m  'module' is not defined   [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\models\Review.js[24m[0m
+[0m   [2m1:18[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m  [2m18:1[22m   [31merror[39m  'module' is not defined   [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\models\Score.js[24m[0m
+[0m   [2m1:18[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m  [2m14:1[22m   [31merror[39m  'module' is not defined   [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\models\SupportTicket.js[24m[0m
+[0m   [2m1:18[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m  [2m34:1[22m   [31merror[39m  'module' is not defined   [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\models\User.js[24m[0m
+[0m   [2m1:18[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m   [2m2:16[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m  [2m33:1[22m   [31merror[39m  'module' is not defined   [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\routes\admin.js[24m[0m
+[0m    [2m1:17[22m  [31merror[39m  'require' is not defined           [2mno-undef[22m[0m
+[0m    [2m2:13[22m  [31merror[39m  'require' is not defined           [2mno-undef[22m[0m
+[0m    [2m3:14[22m  [31merror[39m  'require' is not defined           [2mno-undef[22m[0m
+[0m    [2m4:14[22m  [31merror[39m  'require' is not defined           [2mno-undef[22m[0m
+[0m    [2m5:15[22m  [31merror[39m  'require' is not defined           [2mno-undef[22m[0m
+[0m    [2m6:16[22m  [31merror[39m  'require' is not defined           [2mno-undef[22m[0m
+[0m    [2m7:18[22m  [31merror[39m  'require' is not defined           [2mno-undef[22m[0m
+[0m  [2m115:39[22m  [31merror[39m  'process' is not defined           [2mno-undef[22m[0m
+[0m  [2m123:12[22m  [31merror[39m  'error' is defined but never used  [2mno-unused-vars[22m[0m
+[0m  [2m132:39[22m  [31merror[39m  'process' is not defined           [2mno-undef[22m[0m
+[0m  [2m142:12[22m  [31merror[39m  'error' is defined but never used  [2mno-unused-vars[22m[0m
+[0m  [2m452:1[22m   [31merror[39m  'module' is not defined            [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\routes\ai.js[24m[0m
+[0m    [2m1:17[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m2:13[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m3:18[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m4:14[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m5:15[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m6:14[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m7:23[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m   [2m11:22[22m  [31merror[39m  'process' is not defined  [2mno-undef[22m[0m
+[0m   [2m16:26[22m  [31merror[39m  'process' is not defined  [2mno-undef[22m[0m
+[0m   [2m17:18[22m  [31merror[39m  'process' is not defined  [2mno-undef[22m[0m
+[0m   [2m18:20[22m  [31merror[39m  'process' is not defined  [2mno-undef[22m[0m
+[0m   [2m18:46[22m  [31merror[39m  'process' is not defined  [2mno-undef[22m[0m
+[0m   [2m18:79[22m  [31merror[39m  'process' is not defined  [2mno-undef[22m[0m
+[0m   [2m35:39[22m  [31merror[39m  'process' is not defined  [2mno-undef[22m[0m
+[0m   [2m75:39[22m  [31merror[39m  'process' is not defined  [2mno-undef[22m[0m
+[0m  [2m625:1[22m   [31merror[39m  'module' is not defined   [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\routes\auth.js[24m[0m
+[0m     [2m1:17[22m  [31merror[39m  'require' is not defined                                                              [2mno-undef[22m[0m
+[0m     [2m3:13[22m  [31merror[39m  'require' is not defined                                                              [2mno-undef[22m[0m
+[0m     [2m4:12[22m  [31merror[39m  'require' is not defined                                                              [2mno-undef[22m[0m
+[0m     [2m5:14[22m  [31merror[39m  'require' is not defined                                                              [2mno-undef[22m[0m
+[0m     [2m6:16[22m  [31merror[39m  'require' is not defined                                                              [2mno-undef[22m[0m
+[0m     [2m7:16[22m  [31merror[39m  'require' is not defined                                                              [2mno-undef[22m[0m
+[0m     [2m7:34[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m     [2m8:14[22m  [31merror[39m  'require' is not defined                                                              [2mno-undef[22m[0m
+[0m     [2m9:14[22m  [31merror[39m  'require' is not defined                                                              [2mno-undef[22m[0m
+[0m    [2m10:17[22m  [31merror[39m  'require' is not defined                                                              [2mno-undef[22m[0m
+[0m    [2m12:37[22m  [31merror[39m  '__dirname' is not defined                                                            [2mno-undef[22m[0m
+[0m    [2m73:27[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m    [2m74:46[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m    [2m75:52[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m    [2m76:54[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m    [2m98:25[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m    [2m99:19[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m   [2m233:39[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m   [2m268:46[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m   [2m335:46[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m   [2m449:11[22m  [31merror[39m  'plan' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  [2mno-unused-vars[22m[0m
+[0m   [2m652:24[22m  [31merror[39m  'Buffer' is not defined                                                               [2mno-undef[22m[0m
+[0m   [2m737:46[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m   [2m739:12[22m  [31merror[39m  'error' is defined but never used                                                     [2mno-unused-vars[22m[0m
+[0m   [2m812:46[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m   [2m825:39[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m   [2m829:12[22m  [31merror[39m  'error' is defined but never used                                                     [2mno-unused-vars[22m[0m
+[0m   [2m840:39[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m   [2m861:12[22m  [31merror[39m  'error' is defined but never used                                                     [2mno-unused-vars[22m[0m
+[0m   [2m931:23[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m   [2m932:22[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m   [2m985:26[22m  [31merror[39m  'process' is not defined                                                              [2mno-undef[22m[0m
+[0m  [2m1127:1[22m   [31merror[39m  'module' is not defined                                                               [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\routes\games.js[24m[0m
+[0m    [2m1:17[22m  [31merror[39m  'require' is not defined       [2mno-undef[22m[0m
+[0m    [2m2:18[22m  [31merror[39m  'require' is not defined       [2mno-undef[22m[0m
+[0m    [2m4:14[22m  [31merror[39m  'require' is not defined       [2mno-undef[22m[0m
+[0m    [2m5:16[22m  [31merror[39m  'require' is not defined       [2mno-undef[22m[0m
+[0m    [2m6:21[22m  [31merror[39m  'require' is not defined       [2mno-undef[22m[0m
+[0m    [2m7:14[22m  [31merror[39m  'require' is not defined       [2mno-undef[22m[0m
+[0m    [2m8:13[22m  [31merror[39m  'require' is not defined       [2mno-undef[22m[0m
+[0m  [2m195:39[22m  [31merror[39m  'process' is not defined       [2mno-undef[22m[0m
+[0m  [2m324:39[22m  [31merror[39m  'process' is not defined       [2mno-undef[22m[0m
+[0m  [2m327:12[22m  [31merror[39m  'e' is defined but never used  [2mno-unused-vars[22m[0m
+[0m  [2m337:39[22m  [31merror[39m  'process' is not defined       [2mno-undef[22m[0m
+[0m  [2m345:12[22m  [31merror[39m  'e' is defined but never used  [2mno-unused-vars[22m[0m
+[0m  [2m811:1[22m   [31merror[39m  'module' is not defined        [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\routes\scores.js[24m[0m
+[0m    [2m1:17[22m  [31merror[39m  'require' is not defined       [2mno-undef[22m[0m
+[0m    [2m3:15[22m  [31merror[39m  'require' is not defined       [2mno-undef[22m[0m
+[0m    [2m4:14[22m  [31merror[39m  'require' is not defined       [2mno-undef[22m[0m
+[0m    [2m5:13[22m  [31merror[39m  'require' is not defined       [2mno-undef[22m[0m
+[0m   [2m11:39[22m  [31merror[39m  'process' is not defined       [2mno-undef[22m[0m
+[0m   [2m14:12[22m  [31merror[39m  'e' is defined but never used  [2mno-unused-vars[22m[0m
+[0m  [2m216:1[22m   [31merror[39m  'module' is not defined        [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\routes\support.js[24m[0m
+[0m    [2m1:17[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m2:13[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m3:18[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m4:23[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m5:14[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m   [2m21:39[22m  [31merror[39m  'process' is not defined  [2mno-undef[22m[0m
+[0m  [2m271:1[22m   [31merror[39m  'module' is not defined   [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\scripts\sync-game-counters.js[24m[0m
+[0m    [2m1:18[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m2:16[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m3:14[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m4:15[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m    [2m5:14[22m  [31merror[39m  'require' is not defined  [2mno-undef[22m[0m
+[0m   [2m31:20[22m  [31merror[39m  'process' is not defined  [2mno-undef[22m[0m
+[0m  [2m119:5[22m   [31merror[39m  'process' is not defined  [2mno-undef[22m[0m
+[0m  [2m124:5[22m   [31merror[39m  'process' is not defined  [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\server\socket\snakeArenaServer.js[24m[0m
+[0m    [2m1:20[22m  [31merror[39m  'require' is not defined         [2mno-undef[22m[0m
+[0m    [2m2:13[22m  [31merror[39m  'require' is not defined         [2mno-undef[22m[0m
+[0m   [2m33:45[22m  [31merror[39m  'process' is not defined         [2mno-undef[22m[0m
+[0m   [2m38:18[22m  [31merror[39m  'err' is defined but never used  [2mno-unused-vars[22m[0m
+[0m  [2m422:74[22m  [31merror[39m  'id' is defined but never used   [2mno-unused-vars[22m[0m
+[0m  [2m511:1[22m   [31merror[39m  'module' is not defined          [2mno-undef[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\components\Navbar.jsx[24m[0m
+[0m  [2m30:7[22m  [31merror[39m  Error: Calling setState synchronously within an effect can trigger cascading renders[0m
+[0m[0m
+[0mEffects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:[0m
+[0m* Update external systems with the latest state from React.[0m
+[0m* Subscribe for updates from some external system, calling setState in a callback function when external state changes.[0m
+[0m[0m
+[0mCalling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).[0m
+[0m[0m
+[0m  28 |   useEffect(() => {[0m
+[0m  29 |     if (user?.role !== 'admin') {[0m
+[0m> 30 |       setOpenSupportCount(0);[0m
+[0m     |       ^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect[0m
+[0m  31 |       return undefined;[0m
+[0m  32 |     }[0m
+[0m  33 |  [2mreact-hooks/set-state-in-effect[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\components\PokemonGame.jsx[24m[0m
+[0m   [2m59:12[22m  [31merror[39m  'e' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      [2mno-unused-vars[22m[0m
+[0m  [2m228:50[22m  [31merror[39m  Error: Cannot call impure function during render[0m
+[0m[0m
+[0m`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).[0m
+[0m[0m
+[0m  226 |     // AI selects random Pokemon (not same as player)[0m
+[0m  227 |     const availablePokemon = POKEMON_DATA.filter(p => p.id !== pokemon.id);[0m
+[0m> 228 |     const aiChoice = availablePokemon[Math.floor(Math.random() * availablePokemon.length)];[0m
+[0m      |                                                  ^^^^^^^^^^^^^ Cannot call impure function[0m
+[0m  229 |     const aiCopy = { ...aiChoice, currentHp: aiChoice.hp, buffs: { attack: 0, defense: 0, speed: 0 } };[0m
+[0m  230 |     [0m
+[0m  231 |     setPlayerPokemon(playerCopy);  [2mreact-hooks/purity[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\components\SnakeArena.jsx[24m[0m
+[0m   [2m52:12[22m  [31merror[39m    'e' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                             [2mno-unused-vars[22m[0m
+[0m   [2m91:10[22m  [31merror[39m    'nextDirection' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                             [2mno-unused-vars[22m[0m
+[0m  [2m103:21[22m  [31merror[39m    'setArenaSize' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                              [2mno-unused-vars[22m[0m
+[0m  [2m109:10[22m  [31merror[39m    'aiScores' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                  [2mno-unused-vars[22m[0m
+[0m  [2m110:10[22m  [31merror[39m    'gameRankings' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                              [2mno-unused-vars[22m[0m
+[0m  [2m111:10[22m  [31merror[39m    'winner' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                    [2mno-unused-vars[22m[0m
+[0m  [2m116:9[22m   [31merror[39m    'aiUpdateRef' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                               [2mno-unused-vars[22m[0m
+[0m  [2m308:5[22m   [31merror[39m    Error: This value cannot be modified[0m
+[0m[0m
+[0mModifying a value previously passed as an argument to a hook is not allowed. Consider moving the modification before calling the hook.[0m
+[0m[0m
+[0m  306 |     setDirection({ x: 0, y: 0 });[0m
+[0m  307 |     setNextDirection({ x: 0, y: 0 });[0m
+[0m> 308 |     directionRef.current = { x: 0, y: 0 };[0m
+[0m      |     ^^^^^^^^^^^^ `directionRef` cannot be modified[0m
+[0m  309 |     setWinner(null);[0m
+[0m  310 |     setGameRankings([]);[0m
+[0m  311 |     if (gameLoopRef.current) {  [2mreact-hooks/immutability[22m[0m
+[0m  [2m370:5[22m   [31merror[39m    Error: This value cannot be modified[0m
+[0m[0m
+[0mModifying a value previously passed as an argument to a hook is not allowed. Consider moving the modification before calling the hook.[0m
+[0m[0m
+[0m  368 |     [0m
+[0m  369 |     // Immediate update - no state batching delay[0m
+[0m> 370 |     directionRef.current = newDir;[0m
+[0m      |     ^^^^^^^^^^^^ `directionRef` cannot be modified[0m
+[0m  371 |     setDirection(newDir);[0m
+[0m  372 |     setNextDirection(newDir);[0m
+[0m  373 |   }, []);                                      [2mreact-hooks/immutability[22m[0m
+[0m  [2m377:9[22m   [31merror[39m    'inputQueueRef' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                             [2mno-unused-vars[22m[0m
+[0m  [2m381:5[22m   [31merror[39m    Error: This value cannot be modified[0m
+[0m[0m
+[0mModifying a value previously passed as an argument to a hook is not allowed. Consider moving the modification before calling the hook.[0m
+[0m[0m
+[0m  379 |   // Keep direction ref in sync[0m
+[0m  380 |   useEffect(() => {[0m
+[0m> 381 |     directionRef.current = direction;[0m
+[0m      |     ^^^^^^^^^^^^ `directionRef` cannot be modified[0m
+[0m  382 |   }, [direction]);[0m
+[0m  383 |[0m
+[0m  384 |   // Game loop - uses refs for immediate input response                             [2mreact-hooks/immutability[22m[0m
+[0m  [2m627:6[22m   [33mwarning[39m  React Hook useEffect has a missing dependency: 'handleGameOver'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                         [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m679:6[22m   [33mwarning[39m  React Hook useEffect has a missing dependency: 'startGame'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                              [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\components\SnakeArenaMultiplayer.jsx[24m[0m
+[0m    [2m1:31[22m  [31merror[39m  'useCallback' is defined but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              [2mno-unused-vars[22m[0m
+[0m   [2m12:10[22m  [31merror[39m  'socket' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          [2mno-unused-vars[22m[0m
+[0m   [2m25:18[22m  [31merror[39m  'setScores' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       [2mno-unused-vars[22m[0m
+[0m   [2m45:5[22m   [31merror[39m  Error: Calling setState synchronously within an effect can trigger cascading renders[0m
+[0m[0m
+[0mEffects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:[0m
+[0m* Update external systems with the latest state from React.[0m
+[0m* Subscribe for updates from some external system, calling setState in a callback function when external state changes.[0m
+[0m[0m
+[0mCalling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).[0m
+[0m[0m
+[0m  43 |[0m
+[0m  44 |     socketRef.current = socketInstance;[0m
+[0m> 45 |     setSocket(socketInstance);[0m
+[0m     |     ^^^^^^^^^ Avoid calling setState() directly within an effect[0m
+[0m  46 |[0m
+[0m  47 |     socketInstance.on('connect', () => {[0m
+[0m  48 |       console.log('Connected to server');  [2mreact-hooks/set-state-in-effect[22m[0m
+[0m  [2m250:28[22m  [31merror[39m  'playerId' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            [2mno-unused-vars[22m[0m
+[0m  [2m299:9[22m   [31merror[39m  'joinRoom' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        [2mno-unused-vars[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\context\AuthContext.jsx[24m[0m
+[0m   [2m6:14[22m  [31merror[39m    Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m  [2m72:6[22m   [33mwarning[39m  React Hook useEffect has a missing dependency: 'api'. Either include it or remove the dependency array                          [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\context\CustomGamesContext.jsx[24m[0m
+[0m  [2m8:14[22m  [31merror[39m  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  [2mreact-refresh/only-export-components[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\pages\AddGame.jsx[24m[0m
+[0m  [2m65:24[22m  [31merror[39m  React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  [2mreact-hooks/rules-of-hooks[22m[0m
+[0m  [2m86:24[22m  [31merror[39m  React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  [2mreact-hooks/rules-of-hooks[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\pages\AdminPanel.jsx[24m[0m
+[0m  [2m297:6[22m   [33mwarning[39m  React Hook useEffect has a missing dependency: 'loadAdminData'. Either include it or remove the dependency array                                                                             [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m303:6[22m   [33mwarning[39m  React Hook useEffect has a missing dependency: 'loadAuditLogs'. Either include it or remove the dependency array                                                                             [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m309:6[22m   [33mwarning[39m  React Hook useEffect has a missing dependency: 'loadPayments'. Either include it or remove the dependency array                                                                              [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m317:6[22m   [33mwarning[39m  React Hook useEffect has a missing dependency: 'loadPayments'. Either include it or remove the dependency array                                                                              [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m355:6[22m   [33mwarning[39m  React Hook useEffect has a missing dependency: 'loadSupportTickets'. Either include it or remove the dependency array                                                                        [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m363:6[22m   [33mwarning[39m  React Hook useEffect has a missing dependency: 'loadSupportTickets'. Either include it or remove the dependency array                                                                        [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m484:24[22m  [31merror[39m    React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?    [2mreact-hooks/rules-of-hooks[22m[0m
+[0m  [2m505:27[22m  [31merror[39m    React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?    [2mreact-hooks/rules-of-hooks[22m[0m
+[0m  [2m506:28[22m  [31merror[39m    React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?    [2mreact-hooks/rules-of-hooks[22m[0m
+[0m  [2m549:32[22m  [31merror[39m    React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?    [2mreact-hooks/rules-of-hooks[22m[0m
+[0m  [2m572:3[22m   [31merror[39m    React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render. Did you accidentally call a React Hook after an early return?  [2mreact-hooks/rules-of-hooks[22m[0m
+[0m  [2m831:44[22m  [31merror[39m    'idx' is defined but never used                                                                                                                                                              [2mno-unused-vars[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\pages\EmbeddedGame.jsx[24m[0m
+[0m  [2m398:6[22m  [33mwarning[39m  React Hook useEffect has a missing dependency: 't'. Either include it or remove the dependency array    [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m497:6[22m  [33mwarning[39m  React Hook useCallback has a missing dependency: 't'. Either include it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\pages\GameDetail.jsx[24m[0m
+[0m  [2m202:42[22m  [33mwarning[39m  React Hook useEffect has a missing dependency: 'loadGameDetail'. Either include it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m203:71[22m  [33mwarning[39m  React Hook useEffect has a missing dependency: 'loadComments'. Either include it or remove the dependency array    [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m204:69[22m  [33mwarning[39m  React Hook useEffect has a missing dependency: 'loadReviews'. Either include it or remove the dependency array     [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\pages\Home.jsx[24m[0m
+[0m  [2m299:5[22m  [31merror[39m  Error: Calling setState synchronously within an effect can trigger cascading renders[0m
+[0m[0m
+[0mEffects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:[0m
+[0m* Update external systems with the latest state from React.[0m
+[0m* Subscribe for updates from some external system, calling setState in a callback function when external state changes.[0m
+[0m[0m
+[0mCalling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).[0m
+[0m[0m
+[0m  297 |   useEffect(() => {[0m
+[0m  298 |     const ids = heroShowcaseGames.map((game) => game.id);[0m
+[0m> 299 |     setShowcaseOrder((prev) => {[0m
+[0m      |     ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect[0m
+[0m  300 |       const existing = prev.filter((id) => ids.includes(id));[0m
+[0m  301 |       const missing = ids.filter((id) => !existing.includes(id));[0m
+[0m  302 |       const nextOrder = [...existing, ...missing];  [2mreact-hooks/set-state-in-effect[22m[0m
+[0m  [2m314:7[22m  [31merror[39m  Error: Calling setState synchronously within an effect can trigger cascading renders[0m
+[0m[0m
+[0mEffects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:[0m
+[0m* Update external systems with the latest state from React.[0m
+[0m* Subscribe for updates from some external system, calling setState in a callback function when external state changes.[0m
+[0m[0m
+[0mCalling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).[0m
+[0m[0m
+[0m  312 |     const exists = heroShowcaseGames.some((game) => game.id === hoveredShowcaseId);[0m
+[0m  313 |     if (!exists) {[0m
+[0m> 314 |       setHoveredShowcaseId(null);[0m
+[0m      |       ^^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect[0m
+[0m  315 |     }[0m
+[0m  316 |   }, [heroShowcaseGames, hoveredShowcaseId]);[0m
+[0m  317 |                                                                                                 [2mreact-hooks/set-state-in-effect[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\pages\Login.jsx[24m[0m
+[0m  [2m31:14[22m  [31merror[39m  'err' is defined but never used  [2mno-unused-vars[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\pages\Membership.jsx[24m[0m
+[0m  [2m32:6[22m  [33mwarning[39m  React Hook useEffect has a missing dependency: 't'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                   [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m48:7[22m  [31merror[39m    Error: This value cannot be modified[0m
+[0m[0m
+[0mModifying a variable defined outside a component or hook is not allowed. Consider using an effect.[0m
+[0m[0m
+[0m  46 |     if (result.success && result.checkoutUrl) {[0m
+[0m  47 |       // Redirect to Stripe checkout[0m
+[0m> 48 |       window.location.href = result.checkoutUrl;[0m
+[0m     |       ^^^^^^^^^^^^^^^ value cannot be modified[0m
+[0m  49 |     } else {[0m
+[0m  50 |       setNotice({ type: 'error', message: result.message || t('membership.paymentFailed') || 'Unable to initiate payment' });[0m
+[0m  51 |       setBuyingPlanId('');  [2mreact-hooks/immutability[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\pages\Profile.jsx[24m[0m
+[0m   [2m70:10[22m  [31merror[39m    'reviewsSummary' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                               [2mno-unused-vars[22m[0m
+[0m  [2m100:6[22m   [33mwarning[39m  React Hook useMemo has a missing dependency: 'normalizeGameNameLocalized'. Either include it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m225:5[22m   [33mwarning[39m  React Hook useMemo has a missing dependency: 'normalizeGameNameLocalized'. Either include it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m241:5[22m   [33mwarning[39m  React Hook useMemo has a missing dependency: 'normalizeGameNameLocalized'. Either include it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\pages\Signup.jsx[24m[0m
+[0m  [2m32:14[22m  [31merror[39m  'err' is defined but never used  [2mno-unused-vars[22m[0m
+[0m[0m
+[0m[4mD:\code\GameHub\src\pages\Support.jsx[24m[0m
+[0m  [2m116:6[22m  [33mwarning[39m  React Hook useEffect has a missing dependency: 'loadTickets'. Either include it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m  [2m124:6[22m  [33mwarning[39m  React Hook useEffect has a missing dependency: 'loadTickets'. Either include it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[31m[1m✖ 197 problems (177 errors, 20 warnings)[22m[39m[0m
+[0m[31m[1m[22m[39m[0m

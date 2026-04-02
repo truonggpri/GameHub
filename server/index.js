@@ -22,6 +22,7 @@ const allowedOrigins = [
   // Render domains
   /^https:\/\/.+\.onrender\.com$/,
   // Additional wildcards for your specific domains
+  'https://gamehubplay.xyz',
   /^https:\/\/gamehub.*\.vercel\.app$/,
   /^https:\/\/gamehub.*\.netlify\.app$/
 ].filter(Boolean);

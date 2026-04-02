@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
@@ -35,6 +35,17 @@ const diffColors = {
   Expert: 'text-red-400 bg-red-500/15 border-red-500/30',
 };
 const VIP_DURATION_OPTIONS = [30, 90, 180, 365];
+const SUPPORT_STATUS_OPTIONS = ['open', 'pending', 'resolved', 'closed'];
+
+const isSupportTicketUnread = (ticket, seenMap) => {
+  const lastRole = ticket?.lastMessage?.senderRole;
+  if (lastRole !== 'user') return false;
+  const lastMessageAt = ticket?.lastMessageAt;
+  if (!lastMessageAt) return false;
+  const seenAt = seenMap?.[ticket.id];
+  if (!seenAt) return true;
+  return new Date(lastMessageAt).getTime() > new Date(seenAt).getTime();
+};
 
 const inputCls = 'w-full bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/30 transition-all duration-200';
 const labelCls = 'block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5';
@@ -53,15 +64,24 @@ export default function AdminPanel() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [gameSearch, setGameSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
-  const [newGame, setNewGame] = useState({ title: '', description: '', url: '', imageUrl: '', tags: '', publisher: '', players: '', controls: '', difficulty: 'Medium', category: '', vipOnly: false });
+  const [newGame, setNewGame] = useState({ title: '', description: '', url: '', imageUrl: '', tags: '', publisher: '', players: '', controls: '', difficulty: 'Medium', vipOnly: false });
   const [editingGameId, setEditingGameId] = useState('');
-  const [editForm, setEditForm] = useState({ title: '', description: '', url: '', imageUrl: '', category: '', difficulty: '', tags: '', publisher: '', players: '', controls: '', vipOnly: false });
+  const [editForm, setEditForm] = useState({ title: '', description: '', url: '', imageUrl: '', difficulty: '', tags: '', publisher: '', players: '', controls: '', vipOnly: false });
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [showDeletedGames, setShowDeletedGames] = useState(false);
   const [showDeletedUsers, setShowDeletedUsers] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [vipGrantDays, setVipGrantDays] = useState(30);
+  const [payments, setPayments] = useState([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentStats, setPaymentStats] = useState({ pending: 0, completed: 0, failed: 0, cancelled: 0, totalRevenue: 0, awaitingNotification: 0 });
+  const [supportTickets, setSupportTickets] = useState([]);
+  const [supportSelectedId, setSupportSelectedId] = useState('');
+  const [supportReplyText, setSupportReplyText] = useState('');
+  const [supportStatusFilter, setSupportStatusFilter] = useState('');
+  const [supportSeenMap, setSupportSeenMap] = useState({});
+  const supportLastMapRef = useRef(new Map());
 
   // Helper to check if user can access admin panel (admin or mod)
   const canAccessAdmin = useMemo(() => {
@@ -118,6 +138,70 @@ export default function AdminPanel() {
       }
     } catch (err) {
       setError(err?.response?.data?.message || 'Unable to load admin data');
+    }
+  };
+
+  const loadSupportTickets = async ({ silent = false } = {}) => {
+    try {
+      if (!silent) setBusy(true);
+      const params = supportStatusFilter ? { status: supportStatusFilter } : {};
+      const res = await api.get('/support/tickets', { params });
+      const items = Array.isArray(res.data) ? res.data : [];
+
+      const nextMap = new Map(items.map((item) => [item.id, item.lastMessageAt]));
+      const previousMap = supportLastMapRef.current;
+      const hasNewUserMessage = items.some((item) => {
+        const prevAt = previousMap.get(item.id);
+        const nextAt = item.lastMessageAt;
+        if (!prevAt || !nextAt || prevAt === nextAt) return false;
+        const lastRole = item?.lastMessage?.senderRole;
+        return lastRole === 'user';
+      });
+      if (hasNewUserMessage && activeTab === 'support') {
+        setSuccess(t('adminSupport.newMessageFromUser'));
+      }
+      supportLastMapRef.current = nextMap;
+
+      setSupportTickets(items);
+      setSupportSelectedId((prev) => {
+        if (prev && items.some((item) => item.id === prev)) return prev;
+        return items[0]?.id || '';
+      });
+    } catch (err) {
+      if (!silent) {
+        setError(err?.response?.data?.message || t('adminSupport.loadError'));
+      }
+    } finally {
+      if (!silent) setBusy(false);
+    }
+  };
+
+  const onSupportReply = async () => {
+    const selected = supportTickets.find((item) => item.id === supportSelectedId);
+    if (!selected || !supportReplyText.trim()) return;
+    try {
+      setBusy(true);
+      await api.post(`/support/tickets/${selected.id}/messages`, { content: supportReplyText.trim() });
+      setSupportReplyText('');
+      await loadSupportTickets({ silent: false });
+      setSuccess(t('adminSupport.replySuccess'));
+    } catch (err) {
+      setError(err?.response?.data?.message || t('adminSupport.replyError'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onSupportStatusChange = async (ticketId, status) => {
+    try {
+      setBusy(true);
+      await api.patch(`/support/tickets/${ticketId}/status`, { status });
+      await loadSupportTickets({ silent: false });
+      setSuccess(t('adminSupport.statusSuccess'));
+    } catch (err) {
+      setError(err?.response?.data?.message || t('adminSupport.statusError'));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -219,6 +303,66 @@ export default function AdminPanel() {
   }, [loading, canAccessAdmin, isAdmin, activeTab]);
 
   useEffect(() => {
+    if (!loading && canAccessAdmin && activeTab === 'payments') {
+      loadPayments();
+    }
+  }, [loading, canAccessAdmin, activeTab]);
+
+  useEffect(() => {
+    if (loading || !canAccessAdmin || activeTab !== 'payments') return undefined;
+    const timer = window.setInterval(() => {
+      loadPayments({ silent: true });
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [loading, canAccessAdmin, activeTab]);
+
+  const loadPayments = async ({ silent = false } = {}) => {
+    if (!isAdmin) return;
+    try {
+      if (!silent) setPaymentsLoading(true);
+      const [res, statsRes] = await Promise.all([
+        api.get('/auth/admin/payments'),
+        api.get('/auth/admin/payments/stats')
+      ]);
+      setPayments(Array.isArray(res.data?.payments) ? res.data.payments : []);
+      if (statsRes.data?.stats) {
+        setPaymentStats(statsRes.data.stats);
+      }
+    } catch (err) {
+      if (!silent) setError(err?.response?.data?.message || 'Unable to load payments');
+    } finally {
+      if (!silent) setPaymentsLoading(false);
+    }
+  };
+
+  const onNotifyPayment = async (paymentId) => {
+    try {
+      setBusy(true);
+      await api.patch(`/auth/admin/payments/${paymentId}/notify`);
+      await loadPayments({ silent: true });
+      setSuccess('Payment marked as notified');
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Unable to update payment');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!loading && canAccessAdmin && activeTab === 'support') {
+      loadSupportTickets();
+    }
+  }, [loading, canAccessAdmin, activeTab, supportStatusFilter]);
+
+  useEffect(() => {
+    if (loading || !canAccessAdmin || activeTab !== 'support') return undefined;
+    const timer = window.setInterval(() => {
+      loadSupportTickets({ silent: true });
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [loading, canAccessAdmin, activeTab, supportStatusFilter]);
+
+  useEffect(() => {
     if (success) {
       const t = setTimeout(() => setSuccess(''), 3000);
       return () => clearTimeout(t);
@@ -276,11 +420,10 @@ export default function AdminPanel() {
         ...newGame,
         tags,
         vipOnly: Boolean(newGame.vipOnly),
-        category: newGame.category || tags[0] || 'Custom',
         isCustom: true,
         color: 'group-hover:shadow-[0_0_30px_rgba(255,165,0,0.5)]'
       });
-      setNewGame({ title: '', description: '', url: '', imageUrl: '', tags: '', publisher: '', players: '', controls: '', difficulty: 'Medium', category: '', vipOnly: false });
+      setNewGame({ title: '', description: '', url: '', imageUrl: '', tags: '', publisher: '', players: '', controls: '', difficulty: 'Medium', vipOnly: false });
       setShowAddForm(false);
       flash('Game added successfully!');
       await Promise.all([loadAdminData(), refreshCustomGames()]);
@@ -298,7 +441,6 @@ export default function AdminPanel() {
       description: game.description || '',
       url: game.url || '',
       imageUrl: game.imageUrl || '',
-      category: game.category || '',
       difficulty: game.difficulty || 'Medium',
       tags: Array.isArray(game.tags) ? game.tags.join(', ') : '',
       publisher: game.publisher || '',
@@ -339,6 +481,52 @@ export default function AdminPanel() {
     return (u.username || '').toLowerCase().includes(userSearch.toLowerCase());
   });
 
+  const existingTags = useMemo(() => {
+    const unique = [];
+    const seen = new Set();
+
+    for (const game of games || []) {
+      const sourceTags = Array.isArray(game?.tags) && game.tags.length > 0
+        ? game.tags
+        : [game?.category, game?.difficulty];
+
+      for (const rawTag of sourceTags) {
+        if (typeof rawTag !== 'string') continue;
+        const normalized = rawTag.trim().toLowerCase().replace(/\s+/g, ' ');
+        if (!normalized || seen.has(normalized)) continue;
+        seen.add(normalized);
+        unique.push(normalized);
+      }
+    }
+
+    return unique.slice(0, 30);
+  }, [games]);
+
+  const selectedNewTags = useMemo(() => normalizeTagsInput(newGame.tags), [newGame.tags]);
+  const selectedEditTags = useMemo(() => normalizeTagsInput(editForm.tags), [editForm.tags]);
+
+  const toggleNewGameQuickTag = (tag) => {
+    const normalizedTag = typeof tag === 'string' ? tag.trim().toLowerCase().replace(/\s+/g, ' ') : '';
+    if (!normalizedTag) return;
+
+    const nextTags = selectedNewTags.includes(normalizedTag)
+      ? selectedNewTags.filter((item) => item !== normalizedTag)
+      : [...selectedNewTags, normalizedTag];
+
+    setNewGame((prev) => ({ ...prev, tags: nextTags.join(', ') }));
+  };
+
+  const toggleEditGameQuickTag = (tag) => {
+    const normalizedTag = typeof tag === 'string' ? tag.trim().toLowerCase().replace(/\s+/g, ' ') : '';
+    if (!normalizedTag) return;
+
+    const nextTags = selectedEditTags.includes(normalizedTag)
+      ? selectedEditTags.filter((item) => item !== normalizedTag)
+      : [...selectedEditTags, normalizedTag];
+
+    setEditForm((prev) => ({ ...prev, tags: nextTags.join(', ') }));
+  };
+
   const adminCount = users.filter((u) => u.role === 'admin').length;
   const modCount = users.filter((u) => u.role === 'mod').length;
 
@@ -352,8 +540,46 @@ export default function AdminPanel() {
   const tabs = [
     { key: 'games', label: t('admin.tabs.games'), icon: '🎮', count: games.length },
     { key: 'users', label: t('admin.tabs.users'), icon: '👥', count: users.length },
+    { key: 'support', label: t('adminSupport.support'), icon: '💬', count: supportTickets.length },
+    { key: 'payments', label: 'Payments', icon: '💰', count: paymentStats.awaitingNotification },
     ...(isAdmin ? [{ key: 'logs', label: t('admin.tabs.logs'), icon: '📜', count: auditLogs.length }] : []),
   ];
+
+  const supportSortedTickets = useMemo(() => {
+    return [...supportTickets].sort((a, b) => {
+      const aUnread = isSupportTicketUnread(a, supportSeenMap);
+      const bUnread = isSupportTicketUnread(b, supportSeenMap);
+      if (aUnread !== bUnread) return aUnread ? -1 : 1;
+      const aTime = new Date(a?.lastMessageAt || a?.createdAt || 0).getTime();
+      const bTime = new Date(b?.lastMessageAt || b?.createdAt || 0).getTime();
+      return bTime - aTime;
+    });
+  }, [supportTickets, supportSeenMap]);
+
+  const supportSelectedTicket = supportTickets.find((item) => item.id === supportSelectedId) || null;
+  const selectedSupportLastAt = supportSelectedTicket?.lastMessageAt || '';
+  const selectedSupportLastRole = supportSelectedTicket?.lastMessage?.senderRole || '';
+
+  const onSelectSupportTicket = (ticket) => {
+    setSupportSelectedId(ticket.id);
+    setSupportSeenMap((prev) => ({
+      ...prev,
+      [ticket.id]: ticket.lastMessageAt || new Date().toISOString()
+    }));
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'support' || !supportSelectedTicket) return;
+    if (selectedSupportLastRole !== 'user') return;
+    if (!selectedSupportLastAt) return;
+    setSupportSeenMap((prev) => {
+      if (prev[supportSelectedTicket.id] === selectedSupportLastAt) return prev;
+      return {
+        ...prev,
+        [supportSelectedTicket.id]: selectedSupportLastAt
+      };
+    });
+  }, [activeTab, supportSelectedTicket, selectedSupportLastAt, selectedSupportLastRole]);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white animate-page-in">
@@ -506,10 +732,6 @@ export default function AdminPanel() {
                     <label className={labelCls}>Image URL</label>
                     <input value={newGame.imageUrl} onChange={(e) => setNewGame({ ...newGame, imageUrl: e.target.value })} placeholder="https://..." className={inputCls} />
                   </div>
-                  <div>
-                    <label className={labelCls}>Category</label>
-                    <input value={newGame.category} onChange={(e) => setNewGame({ ...newGame, category: e.target.value })} placeholder="e.g. Arcade, Puzzle" className={inputCls} />
-                  </div>
                   <div className="md:col-span-2">
                     <label className={labelCls}>Description</label>
                     <textarea value={newGame.description} onChange={(e) => setNewGame({ ...newGame, description: e.target.value })} placeholder="Short description..." className={`${inputCls} h-20 resize-none`} />
@@ -538,6 +760,44 @@ export default function AdminPanel() {
                   <div className="md:col-span-2">
                     <label className={labelCls}>Tags (comma separated)</label>
                     <input value={newGame.tags} onChange={(e) => setNewGame({ ...newGame, tags: e.target.value })} placeholder="action, puzzle, retro" className={inputCls} />
+                    <div className="mt-3">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Quick tags</p>
+                      {existingTags.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {existingTags.map((tag) => {
+                            const active = selectedNewTags.includes(tag);
+                            return (
+                              <button
+                                key={`new-${tag}`}
+                                type="button"
+                                onClick={() => toggleNewGameQuickTag(tag)}
+                                className={`px-2.5 py-1 rounded-full border text-[11px] font-bold uppercase tracking-[0.08em] transition-colors ${
+                                  active
+                                    ? 'border-cyan-300/60 bg-cyan-400/20 text-cyan-100'
+                                    : 'border-zinc-600 bg-zinc-800/70 text-zinc-300 hover:border-cyan-400/40 hover:text-cyan-200'
+                                }`}
+                              >
+                                #{tag}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-zinc-500">No existing tags yet.</p>
+                      )}
+                    </div>
+                    {selectedNewTags.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Selected tags</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedNewTags.map((tag) => (
+                            <span key={`selected-new-${tag}`} className="px-2 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/25 text-cyan-200 text-[10px] font-bold">
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="md:col-span-2">
                     <label className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5">
@@ -578,19 +838,81 @@ export default function AdminPanel() {
                 >
                   {editingGameId === game._id ? (
                     /* ---- EDIT MODE ---- */
-                    <div className="p-5">
-                      <div className="flex items-center gap-2 mb-4">
-                        <span className="text-cyan-400 text-sm">✏️</span>
-                        <h4 className="font-bold text-sm">Editing: {game.title}</h4>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        <div>
-                          <label className={labelCls}>Title</label>
-                          <input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} className={inputCls} />
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        onSaveGame();
+                      }}
+                      className="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-zinc-900/90 to-zinc-950/90 backdrop-blur-sm p-5 md:p-6"
+                    >
+                      <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                        <span className="text-cyan-400">✏️</span> Editing: {game.title}
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                          <label className={labelCls}>Title *</label>
+                          <input
+                            value={editForm.title}
+                            onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                            placeholder="Game title"
+                            className={inputCls}
+                            required
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className={labelCls}>Game URL *</label>
+                          <input
+                            value={editForm.url}
+                            onChange={(e) => setEditForm({ ...editForm, url: e.target.value })}
+                            placeholder="https://..."
+                            className={inputCls}
+                            required
+                          />
                         </div>
                         <div>
-                          <label className={labelCls}>Category</label>
-                          <input value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} className={inputCls} />
+                          <label className={labelCls}>Image URL</label>
+                          <input
+                            value={editForm.imageUrl}
+                            onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })}
+                            placeholder="https://..."
+                            className={inputCls}
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className={labelCls}>Description</label>
+                          <textarea
+                            value={editForm.description}
+                            onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                            placeholder="Short description..."
+                            className={`${inputCls} h-20 resize-none`}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Publisher</label>
+                          <input
+                            value={editForm.publisher}
+                            onChange={(e) => setEditForm({ ...editForm, publisher: e.target.value })}
+                            placeholder="Studio name"
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Players</label>
+                          <input
+                            value={editForm.players}
+                            onChange={(e) => setEditForm({ ...editForm, players: e.target.value })}
+                            placeholder="e.g. 1 Player"
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Controls</label>
+                          <input
+                            value={editForm.controls}
+                            onChange={(e) => setEditForm({ ...editForm, controls: e.target.value })}
+                            placeholder="e.g. Keyboard"
+                            className={inputCls}
+                          />
                         </div>
                         <div>
                           <label className={labelCls}>Difficulty</label>
@@ -601,35 +923,54 @@ export default function AdminPanel() {
                             <option value="Expert">Expert</option>
                           </select>
                         </div>
-                        <div className="md:col-span-2 lg:col-span-3">
-                          <label className={labelCls}>Game URL</label>
-                          <input value={editForm.url} onChange={(e) => setEditForm({ ...editForm, url: e.target.value })} className={inputCls} />
-                        </div>
-                        <div className="md:col-span-2 lg:col-span-3">
-                          <label className={labelCls}>Image URL</label>
-                          <input value={editForm.imageUrl} onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })} className={inputCls} />
-                        </div>
-                        <div className="md:col-span-2 lg:col-span-3">
-                          <label className={labelCls}>Description</label>
-                          <textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} className={`${inputCls} h-20 resize-none`} />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Publisher</label>
-                          <input value={editForm.publisher} onChange={(e) => setEditForm({ ...editForm, publisher: e.target.value })} placeholder="Studio name" className={inputCls} />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Players</label>
-                          <input value={editForm.players} onChange={(e) => setEditForm({ ...editForm, players: e.target.value })} placeholder="e.g. 1 Player" className={inputCls} />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Controls</label>
-                          <input value={editForm.controls} onChange={(e) => setEditForm({ ...editForm, controls: e.target.value })} placeholder="e.g. Keyboard" className={inputCls} />
-                        </div>
-                        <div className="md:col-span-2 lg:col-span-3">
+                        <div className="md:col-span-2">
                           <label className={labelCls}>Tags (comma separated)</label>
-                          <input value={editForm.tags} onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })} className={inputCls} />
+                          <input
+                            value={editForm.tags}
+                            onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
+                            placeholder="action, puzzle, retro"
+                            className={inputCls}
+                          />
+                          <div className="mt-3">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Quick tags</p>
+                            {existingTags.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {existingTags.map((tag) => {
+                                  const active = selectedEditTags.includes(tag);
+                                  return (
+                                    <button
+                                      key={`edit-${game._id}-${tag}`}
+                                      type="button"
+                                      onClick={() => toggleEditGameQuickTag(tag)}
+                                      className={`px-2.5 py-1 rounded-full border text-[11px] font-bold uppercase tracking-[0.08em] transition-colors ${
+                                        active
+                                          ? 'border-cyan-300/60 bg-cyan-400/20 text-cyan-100'
+                                          : 'border-zinc-600 bg-zinc-800/70 text-zinc-300 hover:border-cyan-400/40 hover:text-cyan-200'
+                                      }`}
+                                    >
+                                      #{tag}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-zinc-500">No existing tags yet.</p>
+                            )}
+                          </div>
+                          {selectedEditTags.length > 0 && (
+                            <div className="mt-2">
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Selected tags</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {selectedEditTags.map((tag) => (
+                                  <span key={`selected-edit-${tag}`} className="px-2 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/25 text-cyan-200 text-[10px] font-bold">
+                                    #{tag}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div className="md:col-span-2 lg:col-span-3">
+                        <div className="md:col-span-2">
                           <label className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5">
                             <input
                               type="checkbox"
@@ -641,13 +982,23 @@ export default function AdminPanel() {
                           </label>
                         </div>
                       </div>
-                      <div className="flex justify-end gap-2 mt-4">
-                        <button onClick={() => setEditingGameId('')} className="px-4 py-2 rounded-xl bg-zinc-800 text-zinc-300 text-sm font-bold hover:bg-zinc-700 transition-colors">Cancel</button>
-                        <button onClick={onSaveGame} disabled={busy} className="px-5 py-2 rounded-xl bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-400 disabled:opacity-50 transition-colors">
-                          {busy ? 'Saving...' : '💾 Save'}
+                      <div className="flex justify-end gap-3 mt-5">
+                        <button
+                          type="button"
+                          onClick={() => setEditingGameId('')}
+                          className="px-5 py-2.5 rounded-xl bg-zinc-800 text-zinc-300 text-sm font-bold hover:bg-zinc-700 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={busy}
+                          className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-bold shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 disabled:opacity-50 transition-all"
+                        >
+                          {busy ? 'Saving...' : 'Save Changes'}
                         </button>
                       </div>
-                    </div>
+                    </form>
                   ) : (
                     /* ---- VIEW MODE ---- */
                     <div className="flex items-stretch gap-0">
@@ -677,9 +1028,6 @@ export default function AdminPanel() {
                               )}
                               {game.difficulty && diffColors[game.difficulty] && (
                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${diffColors[game.difficulty]}`}>{game.difficulty}</span>
-                              )}
-                              {game.category && (
-                                <span className="text-[10px] font-medium text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">{game.category}</span>
                               )}
                               {game.vipOnly && (
                                 <span className="text-[10px] font-bold text-amber-200 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded">VIP</span>
@@ -972,6 +1320,246 @@ export default function AdminPanel() {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ===== SUPPORT TAB ===== */}
+        {activeTab === 'support' && (
+          <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-4 animate-fade-up">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3">
+              <div className="flex items-center gap-2 mb-3">
+                <select
+                  value={supportStatusFilter}
+                  onChange={(e) => setSupportStatusFilter(e.target.value)}
+                  className="flex-1 rounded-lg bg-zinc-900 border border-zinc-700 px-2.5 py-2 text-xs font-bold uppercase"
+                >
+                  <option value="">{t('adminSupport.allStatus')}</option>
+                  {SUPPORT_STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>{t(`support.status.${status}`)}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => loadSupportTickets({ silent: false })}
+                  className="px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-800 text-xs font-bold text-zinc-200 hover:bg-zinc-700"
+                >
+                  {t('adminSupport.refresh')}
+                </button>
+              </div>
+
+              <div className="max-h-[560px] overflow-y-auto space-y-2 pr-1">
+                {supportTickets.length === 0 ? (
+                  <p className="text-sm text-zinc-500 p-2">{t('adminSupport.noTickets')}</p>
+                ) : supportSortedTickets.map((ticket) => (
+                  (() => {
+                    const unread = isSupportTicketUnread(ticket, supportSeenMap);
+                    return (
+                  <button
+                    key={ticket.id}
+                    type="button"
+                    onClick={() => onSelectSupportTicket(ticket)}
+                    className={`w-full text-left rounded-xl border p-3 transition-colors ${supportSelectedId === ticket.id ? 'border-cyan-400/35 bg-cyan-400/10' : unread ? 'border-amber-400/55 bg-amber-400/10 hover:border-amber-300/70' : 'border-zinc-800 bg-zinc-950/60 hover:border-zinc-700'}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-bold text-white line-clamp-1">{ticket.subject}</p>
+                      <div className="flex items-center gap-1.5">
+                        {unread && (
+                          <span className="text-[9px] uppercase px-1.5 py-0.5 rounded border border-amber-300/70 bg-amber-400/20 text-amber-100 font-black">{t('supportChatbot.new')}</span>
+                        )}
+                        <span className="text-[10px] uppercase px-1.5 py-0.5 rounded border border-zinc-700 bg-zinc-800 text-zinc-300 font-bold">{t(`support.status.${ticket.status}`)}</span>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-zinc-500 mt-1 line-clamp-1">{ticket?.user?.username || t('support.user')} • {t(`support.categories.${ticket.category}`)}</p>
+                    <p className="text-[10px] text-zinc-600 mt-1">{formatDate(ticket.lastMessageAt)}</p>
+                  </button>
+                    );
+                  })()
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 min-h-[560px] flex flex-col">
+              {supportSelectedTicket ? (
+                <>
+                  <div className="p-4 border-b border-zinc-800 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="text-lg font-black truncate">{supportSelectedTicket.subject}</h3>
+                      <p className="text-xs text-zinc-500 mt-1">{supportSelectedTicket?.user?.username || t('support.user')} • {t(`support.categories.${supportSelectedTicket.category}`)}</p>
+                    </div>
+                    <select
+                      value={supportSelectedTicket.status}
+                      onChange={(e) => onSupportStatusChange(supportSelectedTicket.id, e.target.value)}
+                      className="rounded-lg bg-zinc-900 border border-zinc-700 px-2.5 py-2 text-xs font-bold uppercase"
+                      disabled={busy}
+                    >
+                      {SUPPORT_STATUS_OPTIONS.map((status) => (
+                        <option key={status} value={status}>{t(`support.status.${status}`)}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {Array.isArray(supportSelectedTicket.messages) && supportSelectedTicket.messages.length > 0 ? supportSelectedTicket.messages.map((msg) => {
+                      const mine = ['admin', 'mod'].includes(msg.senderRole);
+                      return (
+                        <div key={msg.id} className={`max-w-[82%] rounded-xl px-3 py-2 border text-sm ${mine ? 'ml-auto bg-cyan-500 text-zinc-950 border-cyan-400/60' : 'mr-auto bg-zinc-950 text-zinc-200 border-zinc-700'}`}>
+                          <div className={`text-[11px] mb-1 ${mine ? 'text-zinc-900/80' : 'text-zinc-500'}`}>
+                            {msg?.sender?.username || msg.senderRole} • {formatDate(msg.createdAt)}
+                          </div>
+                          <div className="whitespace-pre-wrap">{msg.content}</div>
+                        </div>
+                      );
+                    }) : (
+                      <p className="text-sm text-zinc-500">{t('adminSupport.noMessages')}</p>
+                    )}
+                  </div>
+
+                  <div className="p-4 border-t border-zinc-800">
+                    <div className="flex items-end gap-2">
+                      <textarea
+                        value={supportReplyText}
+                        onChange={(e) => setSupportReplyText(e.target.value)}
+                        placeholder={t('adminSupport.replyPlaceholder')}
+                        className="flex-1 h-20 rounded-xl bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm resize-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={onSupportReply}
+                        disabled={busy || !supportReplyText.trim()}
+                        className="px-4 py-2.5 rounded-xl bg-cyan-500 text-zinc-950 text-sm font-black hover:bg-cyan-400 disabled:opacity-60"
+                      >
+                        {t('adminSupport.sendReply')}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex-1 grid place-items-center text-zinc-500 text-sm">{t('adminSupport.selectTicket')}</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ===== PAYMENTS TAB ===== */}
+        {activeTab === 'payments' && (
+          <div className="space-y-5 animate-fade-up">
+            {/* Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+                <p className="text-[10px] font-bold uppercase text-zinc-500 mb-1">Pending</p>
+                <p className="text-xl font-bold text-amber-400">{paymentStats.pending}</p>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+                <p className="text-[10px] font-bold uppercase text-zinc-500 mb-1">Completed</p>
+                <p className="text-xl font-bold text-emerald-400">{paymentStats.completed}</p>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+                <p className="text-[10px] font-bold uppercase text-zinc-500 mb-1">Failed</p>
+                <p className="text-xl font-bold text-red-400">{paymentStats.failed}</p>
+              </div>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+                <p className="text-[10px] font-bold uppercase text-zinc-500 mb-1">Cancelled</p>
+                <p className="text-xl font-bold text-zinc-400">{paymentStats.cancelled}</p>
+              </div>
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                <p className="text-[10px] font-bold uppercase text-amber-200 mb-1">Total Revenue</p>
+                <p className="text-xl font-bold text-amber-300">{paymentStats.totalRevenue.toLocaleString()} usd</p>
+              </div>
+            </div>
+
+            {/* Payments List */}
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+              <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+                <h3 className="font-bold text-lg flex items-center gap-2">
+                  <span>💰</span> Payment Transactions
+                  {paymentStats.awaitingNotification > 0 && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      {paymentStats.awaitingNotification} new
+                    </span>
+                  )}
+                </h3>
+                <button
+                  onClick={() => loadPayments()}
+                  disabled={paymentsLoading}
+                  className="p-2 rounded-lg bg-zinc-800 text-zinc-400 hover:bg-zinc-700 disabled:opacity-50"
+                >
+                  <svg className={`w-4 h-4 ${paymentsLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-zinc-950/50 text-zinc-500">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-bold text-[11px] uppercase">Transaction ID</th>
+                      <th className="text-left px-4 py-3 font-bold text-[11px] uppercase">User</th>
+                      <th className="text-left px-4 py-3 font-bold text-[11px] uppercase">Plan</th>
+                      <th className="text-left px-4 py-3 font-bold text-[11px] uppercase">Amount</th>
+                      <th className="text-left px-4 py-3 font-bold text-[11px] uppercase">Status</th>
+                      <th className="text-left px-4 py-3 font-bold text-[11px] uppercase">Date</th>
+                      <th className="text-left px-4 py-3 font-bold text-[11px] uppercase">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800">
+                    {payments.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-12 text-center text-zinc-500">
+                          <div className="text-4xl mb-2">💰</div>
+                          <p>No payments yet</p>
+                        </td>
+                      </tr>
+                    ) : payments.map((p) => (
+                      <tr key={p.id} className="hover:bg-zinc-800/30">
+                        <td className="px-4 py-3">
+                          <code className="text-xs bg-zinc-950 px-2 py-1 rounded text-cyan-400">{p.transactionId}</code>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {p.user?.avatar && (
+                              <img src={p.user.avatar} alt="" className="w-6 h-6 rounded-full" />
+                            )}
+                            <span className="font-medium">{p.user?.username || 'Unknown'}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-zinc-300">{p.planTitle}</td>
+                        <td className="px-4 py-3 font-bold">
+                          {p.amount?.toLocaleString()} {p.currency}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${
+                            p.status === 'completed' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' :
+                            p.status === 'pending' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' :
+                            p.status === 'failed' ? 'bg-red-500/15 text-red-300 border-red-500/30' :
+                            'bg-zinc-500/15 text-zinc-400 border-zinc-500/30'
+                          }`}>
+                            {p.status}
+                          </span>
+                          {!p.adminNotified && p.status === 'completed' && (
+                            <span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-amber-500 text-zinc-950 font-bold">NEW</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-500 text-xs">
+                          {p.paidAt ? new Date(p.paidAt).toLocaleDateString() : new Date(p.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          {!p.adminNotified && (
+                            <button
+                              onClick={() => onNotifyPayment(p.id)}
+                              disabled={busy}
+                              className="text-xs px-3 py-1.5 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/30 disabled:opacity-50"
+                            >
+                              Mark Seen
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
       </div>

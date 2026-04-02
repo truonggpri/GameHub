@@ -47,7 +47,6 @@ const normalizeTags = (value) => {
 };
 
 const deriveFallbackTags = (payload = {}) => normalizeTags([
-  payload.category,
   payload.difficulty
 ]);
 
@@ -329,6 +328,7 @@ router.get('/games', requireModOrAdmin, async (req, res) => {
 router.post('/games', requireModOrAdmin, async (req, res) => {
   try {
     const payload = { ...req.body };
+    delete payload.category;
     if (!payload.title) return res.status(400).json({ message: 'Title is required' });
     payload.url = normalizeUrl(payload.url);
     if (!payload.url) {
@@ -360,6 +360,7 @@ router.post('/games', requireModOrAdmin, async (req, res) => {
 router.put('/games/:id', requireModOrAdmin, async (req, res) => {
   try {
     const payload = { ...req.body };
+    delete payload.category;
     delete payload.path;
     payload.isCustom = true;
     payload.tags = resolveGameTags(payload);

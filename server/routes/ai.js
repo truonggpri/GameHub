@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const Game = require('../models/Game');
 const Score = require('../models/Score');
 const User = require('../models/User');
+const SupportTicket = require('../models/SupportTicket');
 
 const router = express.Router();
 
@@ -19,6 +20,24 @@ const AI_API_KEY = process.env.AI_API_KEY || process.env.DASHSCOPE_API_KEY || pr
 const normalizeTag = (value) => {
   if (typeof value !== 'string') return '';
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
+};
+
+const resolveUserRole = (user) => {
+  if (user?.isAdmin) return 'admin';
+  if (user?.role === 'admin' || user?.role === 'mod' || user?.role === 'user') return user.role;
+  return 'user';
+};
+
+const requireAuthUser = async (req) => {
+  const token = req.header('Authorization')?.replace('Bearer ', '');
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findOne({ _id: decoded.id, deletedAt: null }).select('_id username role isAdmin');
+    return user || null;
+  } catch {
+    return null;
+  }
 };
 
 const resolveGameTags = (game = {}) => {
@@ -91,6 +110,60 @@ const extractJsonObjectFromText = (value) => {
     }
   }
   return null;
+};
+
+const normalizeSupportCategory = (value) => {
+  const raw = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (['vip', 'game', 'billing', 'account', 'other'].includes(raw)) return raw;
+  if (['payment', 'purchase', 'refund'].includes(raw)) return 'billing';
+  if (['login', 'profile', 'security'].includes(raw)) return 'account';
+  return 'other';
+};
+
+const deriveCategoryFromText = (text) => {
+  const normalized = String(text || '').toLowerCase();
+  if (/(vip|membership|premium)/.test(normalized)) return 'vip';
+  if (/(payment|momo|bank|stripe|billing|refund|invoice)/.test(normalized)) return 'billing';
+  if (/(account|login|password|avatar|profile|auth)/.test(normalized)) return 'account';
+  if (/(game|match|score|lag|bug|error|crash|freeze)/.test(normalized)) return 'game';
+  return 'other';
+};
+
+const buildIssueSummaryFallback = (message, gameTitle) => {
+  const compact = String(message || '').replace(/\s+/g, ' ').trim();
+  const short = compact.slice(0, 96);
+  const subject = gameTitle
+    ? `[${gameTitle}] ${short || 'Báo lỗi từ người dùng'}`
+    : short || 'Báo lỗi từ người dùng';
+  return {
+    subject: subject.slice(0, 120),
+    category: deriveCategoryFromText(compact),
+    summary: compact || 'Người dùng chưa cung cấp đủ mô tả.',
+    reproductionSteps: [],
+    expectedBehavior: '',
+    actualBehavior: compact || '',
+    impact: '',
+    environment: '',
+    requestedHelp: ''
+  };
+};
+
+const formatIssueForAdmin = (issue, meta = {}) => {
+  const lines = [
+    `AI Summary: ${issue.summary || 'N/A'}`,
+    issue.actualBehavior ? `Actual: ${issue.actualBehavior}` : '',
+    issue.expectedBehavior ? `Expected: ${issue.expectedBehavior}` : '',
+    issue.impact ? `Impact: ${issue.impact}` : '',
+    issue.environment ? `Environment: ${issue.environment}` : '',
+    issue.requestedHelp ? `Requested support: ${issue.requestedHelp}` : '',
+    Array.isArray(issue.reproductionSteps) && issue.reproductionSteps.length > 0
+      ? `Reproduction steps:\n${issue.reproductionSteps.map((step, index) => `${index + 1}. ${step}`).join('\n')}`
+      : '',
+    meta.gameTitle ? `Game: ${meta.gameTitle}` : '',
+    meta.originalUserMessage ? `Original user message: ${meta.originalUserMessage}` : ''
+  ].filter(Boolean);
+
+  return lines.join('\n\n').slice(0, 1900);
 };
 
 const getUserAiProfile = async (userId) => {
@@ -430,6 +503,122 @@ router.post('/chat', async (req, res) => {
     res.json({ message: fallback(), source: 'fallback' });
   } catch (error) {
     res.status(500).json({ message: error.message || 'Unable to process chat message' });
+  }
+});
+
+router.post('/report-issue', async (req, res) => {
+  try {
+    const user = await requireAuthUser(req);
+    if (!user) {
+      return res.status(401).json({ message: 'Login is required to submit an issue report' });
+    }
+
+    const message = typeof req.body.message === 'string' ? req.body.message.trim() : '';
+    const gameId = typeof req.body.gameId === 'string' ? req.body.gameId.trim() : '';
+    const conversationRaw = Array.isArray(req.body.conversation) ? req.body.conversation : [];
+    const conversation = conversationRaw
+      .map((item) => ({
+        role: item?.role === 'assistant' ? 'assistant' : 'user',
+        content: typeof item?.content === 'string' ? item.content.trim() : ''
+      }))
+      .filter((item) => item.content)
+      .slice(-10);
+
+    if (!message || message.length < 6) {
+      return res.status(400).json({ message: 'Issue description must be at least 6 characters' });
+    }
+    if (message.length > 2500) {
+      return res.status(400).json({ message: 'Issue description is too long' });
+    }
+
+    let selectedGame = null;
+    if (mongoose.Types.ObjectId.isValid(gameId)) {
+      selectedGame = await Game.findById(gameId).select('title category difficulty');
+    }
+
+    let issue = buildIssueSummaryFallback(message, selectedGame?.title || '');
+
+    try {
+      const aiContent = await fetchAiCompletion([
+        {
+          role: 'system',
+          content: 'Bạn là điều phối viên hỗ trợ GameHub. Hãy chuẩn hóa lỗi người dùng thành JSON object hợp lệ với schema {"subject":"","category":"vip|game|billing|account|other","summary":"","reproductionSteps":[""],"expectedBehavior":"","actualBehavior":"","impact":"","environment":"","requestedHelp":""}. Trả JSON duy nhất, không thêm text khác.'
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            reporter: { username: user.username, role: resolveUserRole(user) },
+            selectedGame: selectedGame
+              ? {
+                  title: selectedGame.title,
+                  category: selectedGame.category || '',
+                  difficulty: selectedGame.difficulty || ''
+                }
+              : null,
+            latestIssueMessage: message,
+            recentConversation: conversation
+          })
+        }
+      ]);
+
+      const parsed = extractJsonObject(aiContent) || extractJsonObjectFromText(aiContent);
+      if (parsed && typeof parsed === 'object') {
+        issue = {
+          subject: typeof parsed.subject === 'string' ? parsed.subject.trim().slice(0, 120) : issue.subject,
+          category: normalizeSupportCategory(parsed.category),
+          summary: typeof parsed.summary === 'string' ? parsed.summary.trim() : issue.summary,
+          reproductionSteps: Array.isArray(parsed.reproductionSteps)
+            ? parsed.reproductionSteps.map((step) => String(step || '').trim()).filter(Boolean).slice(0, 8)
+            : issue.reproductionSteps,
+          expectedBehavior: typeof parsed.expectedBehavior === 'string' ? parsed.expectedBehavior.trim() : '',
+          actualBehavior: typeof parsed.actualBehavior === 'string' ? parsed.actualBehavior.trim() : issue.actualBehavior,
+          impact: typeof parsed.impact === 'string' ? parsed.impact.trim() : '',
+          environment: typeof parsed.environment === 'string' ? parsed.environment.trim() : '',
+          requestedHelp: typeof parsed.requestedHelp === 'string' ? parsed.requestedHelp.trim() : ''
+        };
+      }
+    } catch {
+      issue = {
+        ...issue,
+        category: normalizeSupportCategory(issue.category)
+      };
+    }
+
+    if (!issue.subject) {
+      issue.subject = buildIssueSummaryFallback(message, selectedGame?.title || '').subject;
+    }
+
+    const now = new Date();
+    const ticket = await SupportTicket.create({
+      user: user._id,
+      subject: issue.subject,
+      category: normalizeSupportCategory(issue.category || deriveCategoryFromText(message)),
+      status: 'open',
+      gameId,
+      messages: [{
+        sender: user._id,
+        senderRole: resolveUserRole(user),
+        content: formatIssueForAdmin(issue, {
+          gameTitle: selectedGame?.title || '',
+          originalUserMessage: message
+        }),
+        createdAt: now
+      }],
+      lastMessageAt: now
+    });
+
+    res.status(201).json({
+      message: 'AI đã tổng hợp và gửi ticket cho admin.',
+      ticket: {
+        id: ticket._id,
+        subject: ticket.subject,
+        category: ticket.category,
+        status: ticket.status
+      },
+      aiSummary: issue.summary || ''
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Unable to submit AI issue report' });
   }
 });
 

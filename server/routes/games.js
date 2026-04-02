@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const router = express.Router();
 const Game = require('../models/Game');
 const Review = require('../models/Review');
+const GameComment = require('../models/GameComment');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 
@@ -90,9 +91,13 @@ const toGameResponse = (game, options = {}) => {
   const viewer = options.viewer || null;
   const vipOnly = Boolean(base.vipOnly);
   const canAccessVip = !vipOnly || isUserVip(viewer);
+  const playCount = Number.isFinite(Number(base.playCount)) ? Number(base.playCount) : 0;
+  const likeCount = Number.isFinite(Number(base.likeCount)) ? Number(base.likeCount) : 0;
   return {
     ...base,
     tags: resolveGameTags(base),
+    playCount,
+    likeCount,
     vipOnly,
     vipLocked: vipOnly && !canAccessVip,
     url: canAccessVip ? base.url : '',
@@ -112,6 +117,25 @@ const toReviewResponse = (review) => ({
         username: review.user.username,
         avatar: review.user.avatar,
         isVip: isUserVip(review.user)
+      }
+    : null
+});
+
+const toGameCommentResponse = (comment) => ({
+  id: comment._id,
+  parentComment: comment.parentComment || null,
+  content: comment.content,
+  isEdited: Boolean(comment.isEdited),
+  likes: Array.isArray(comment.likes) ? comment.likes.length : 0,
+  likedBy: Array.isArray(comment.likes) ? comment.likes.slice(0, 5).map((id) => String(id)) : [],
+  createdAt: comment.createdAt,
+  updatedAt: comment.updatedAt,
+  user: comment.user
+    ? {
+        id: comment.user._id,
+        username: comment.user.username,
+        avatar: comment.user.avatar,
+        isVip: isUserVip(comment.user)
       }
     : null
 });
@@ -191,6 +215,15 @@ const normalizeReviewSort = (value) => (
   typeof value === 'string' && REVIEW_SORTS[value] ? value : 'newest'
 );
 
+const COMMENT_SORTS = {
+  newest: { createdAt: -1, _id: -1 },
+  oldest: { createdAt: 1, _id: 1 }
+};
+
+const normalizeCommentSort = (value) => (
+  typeof value === 'string' && COMMENT_SORTS[value] ? value : 'newest'
+);
+
 const getReviewList = async (gameId, options = {}) => {
   const limitRaw = Number(options.limit);
   const pageRaw = Number(options.page);
@@ -219,6 +252,65 @@ const getReviewList = async (gameId, options = {}) => {
       hasNextPage: page < totalPages,
       hasPrevPage: page > 1
     },
+    sort
+  };
+};
+
+const getGameCommentList = async (gameId, options = {}) => {
+  const limitRaw = Number(options.limit);
+  const pageRaw = Number(options.page);
+  const limit = Number.isInteger(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 20;
+  const requestedPage = Number.isInteger(pageRaw) ? Math.max(pageRaw, 1) : 1;
+  const sort = normalizeCommentSort(options.sort);
+
+  const total = await GameComment.countDocuments({ game: gameId, parentComment: null });
+  const totalComments = await GameComment.countDocuments({ game: gameId });
+  const totalPages = total > 0 ? Math.ceil(total / limit) : 1;
+  const page = Math.min(requestedPage, totalPages);
+  const skip = (page - 1) * limit;
+
+  const comments = await GameComment.find({ game: gameId, parentComment: null })
+    .sort(COMMENT_SORTS[sort])
+    .skip(skip)
+    .limit(limit)
+    .populate('user', 'username avatar vipTier vipExpiresAt');
+
+  const parentIds = comments.map((item) => item._id);
+  const replies = parentIds.length > 0
+    ? await GameComment.find({ game: gameId, parentComment: { $in: parentIds } })
+      .sort({ createdAt: 1, _id: 1 })
+      .populate('user', 'username avatar vipTier vipExpiresAt')
+    : [];
+
+  const repliesByParent = new Map();
+  for (const reply of replies) {
+    const parentId = reply.parentComment ? String(reply.parentComment) : '';
+    if (!parentId) continue;
+    if (!repliesByParent.has(parentId)) {
+      repliesByParent.set(parentId, []);
+    }
+    repliesByParent.get(parentId).push(toGameCommentResponse(reply));
+  }
+
+  return {
+    comments: comments.map((comment) => {
+      const commentData = toGameCommentResponse(comment);
+      const replyItems = repliesByParent.get(String(comment._id)) || [];
+      return {
+        ...commentData,
+        replies: replyItems,
+        replyCount: replyItems.length
+      };
+    }),
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1
+    },
+    totalComments,
     sort
   };
 };
@@ -306,6 +398,193 @@ router.get('/reviews/me', auth, async (req, res) => {
         breakdown: starBuckets
       }
     });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.get('/:id/comments', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid game id' });
+    }
+
+    const game = await Game.findOne({ _id: req.params.id, ...activeGameQuery }).select('_id');
+    if (!game) return res.status(404).json({ message: 'Game not found' });
+
+    const commentList = await getGameCommentList(game._id, {
+      limit: req.query.limit,
+      page: req.query.page,
+      sort: req.query.sort
+    });
+
+    res.json(commentList);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/:id/comments', auth, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid game id' });
+    }
+
+    const game = await Game.findOne({ _id: req.params.id, ...activeGameQuery }).select('_id');
+    if (!game) return res.status(404).json({ message: 'Game not found' });
+
+    const contentRaw = typeof req.body.content === 'string'
+      ? req.body.content
+      : (typeof req.body.comment === 'string' ? req.body.comment : '');
+    const content = contentRaw.trim();
+    const parentCommentRaw = typeof req.body.parentComment === 'string'
+      ? req.body.parentComment.trim()
+      : (typeof req.body.parentCommentId === 'string' ? req.body.parentCommentId.trim() : '');
+
+    if (!content) {
+      return res.status(400).json({ message: 'Comment is required' });
+    }
+    if (content.length > 2000) {
+      return res.status(400).json({ message: 'Comment is too long (max 2000 characters)' });
+    }
+
+    let parentCommentId = null;
+    if (parentCommentRaw) {
+      if (!mongoose.Types.ObjectId.isValid(parentCommentRaw)) {
+        return res.status(400).json({ message: 'Invalid parent comment id' });
+      }
+      const parentComment = await GameComment.findOne({ _id: parentCommentRaw, game: game._id }).select('_id');
+      if (!parentComment) {
+        return res.status(404).json({ message: 'Parent comment not found' });
+      }
+      parentCommentId = parentComment._id;
+    }
+
+    const comment = await GameComment.create({
+      game: game._id,
+      user: req.user.id,
+      parentComment: parentCommentId,
+      content
+    });
+
+    await comment.populate('user', 'username avatar vipTier vipExpiresAt');
+
+    res.status(201).json({
+      message: 'Comment created',
+      comment: toGameCommentResponse(comment)
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Like/unlike a comment
+router.post('/:gameId/comments/:commentId/like', auth, async (req, res) => {
+  try {
+    const { gameId, commentId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(gameId) || !mongoose.Types.ObjectId.isValid(commentId)) {
+      return res.status(400).json({ message: 'Invalid id' });
+    }
+
+    const game = await Game.findOne({ _id: gameId, ...activeGameQuery }).select('_id');
+    if (!game) return res.status(404).json({ message: 'Game not found' });
+
+    const comment = await GameComment.findOne({ _id: commentId, game: gameId });
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+
+    const userId = req.user.id;
+    const userIdStr = userId.toString ? userId.toString() : String(userId);
+    const alreadyLiked = comment.likes.some((id) => String(id) === userIdStr);
+
+    if (alreadyLiked) {
+      comment.likes = comment.likes.filter((id) => String(id) !== userIdStr);
+    } else {
+      comment.likes.push(userId);
+    }
+
+    await comment.save();
+    await comment.populate('user', 'username avatar vipTier vipExpiresAt');
+
+    res.json({
+      liked: !alreadyLiked,
+      likes: comment.likes.length,
+      comment: toGameCommentResponse(comment)
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Edit a comment
+router.put('/:gameId/comments/:commentId', auth, async (req, res) => {
+  try {
+    const { gameId, commentId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(gameId) || !mongoose.Types.ObjectId.isValid(commentId)) {
+      return res.status(400).json({ message: 'Invalid id' });
+    }
+
+    const game = await Game.findOne({ _id: gameId, ...activeGameQuery }).select('_id');
+    if (!game) return res.status(404).json({ message: 'Game not found' });
+
+    const comment = await GameComment.findOne({ _id: commentId, game: gameId });
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+
+    if (String(comment.user) !== req.user.id) {
+      return res.status(403).json({ message: 'You can only edit your own comments' });
+    }
+
+    const contentRaw = typeof req.body.content === 'string' ? req.body.content.trim() : '';
+    if (!contentRaw) {
+      return res.status(400).json({ message: 'Comment content is required' });
+    }
+    if (contentRaw.length > 2000) {
+      return res.status(400).json({ message: 'Comment is too long (max 2000 characters)' });
+    }
+
+    comment.content = contentRaw;
+    comment.isEdited = true;
+    comment.updatedAt = new Date();
+    await comment.save();
+    await comment.populate('user', 'username avatar vipTier vipExpiresAt');
+
+    res.json({
+      message: 'Comment updated',
+      comment: toGameCommentResponse(comment)
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Delete a comment
+router.delete('/:gameId/comments/:commentId', auth, async (req, res) => {
+  try {
+    const { gameId, commentId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(gameId) || !mongoose.Types.ObjectId.isValid(commentId)) {
+      return res.status(400).json({ message: 'Invalid id' });
+    }
+
+    const game = await Game.findOne({ _id: gameId, ...activeGameQuery }).select('_id');
+    if (!game) return res.status(404).json({ message: 'Game not found' });
+
+    const comment = await GameComment.findOne({ _id: commentId, game: gameId });
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+
+    if (String(comment.user) !== req.user.id) {
+      return res.status(403).json({ message: 'You can only delete your own comments' });
+    }
+
+    // Delete all replies if this is a parent comment
+    if (!comment.parentComment) {
+      await GameComment.deleteMany({ parentComment: commentId });
+    }
+
+    await comment.deleteOne();
+
+    res.json({ message: 'Comment deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

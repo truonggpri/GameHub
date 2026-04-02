@@ -17,6 +17,8 @@ const gameSchema = new mongoose.Schema({
   version: { type: String, default: '' },
   players: { type: String, default: '' },
   controls: { type: String, default: '' },
+  playCount: { type: Number, default: 0 },
+  likeCount: { type: Number, default: 0 },
   vipOnly: { type: Boolean, default: false },
   isCustom: { type: Boolean, default: true },
   addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

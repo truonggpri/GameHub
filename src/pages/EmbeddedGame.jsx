@@ -1,5 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { useCustomGames } from '../context/CustomGamesContext';
 import { useAuth } from '../context/AuthContext';
@@ -16,7 +17,10 @@ const TRUSTED_EMBED_HOSTS = [
 ];
 
 const TELEMETRY_STORAGE_KEY = 'gamehub.embed.telemetry';
-const IFRAME_TIMEOUT_MS = 10000;
+const IFRAME_TIMEOUT_MS = 20000;
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace(/\/$/, '');
+const COMMENTS_PAGE_SIZE = 6;
+const COMMENT_SORT_OPTIONS = ['newest', 'oldest'];
 const SCORE_EVENT_TYPES = new Set([
   'game_score',
   'score',
@@ -34,6 +38,30 @@ const isValidHttpUrl = (value) => {
   } catch {
     return false;
   }
+};
+
+const normalizePagination = (rawPagination, fallbackLimit = COMMENTS_PAGE_SIZE) => ({
+  page: Number(rawPagination?.page) || 1,
+  limit: Number(rawPagination?.limit) || fallbackLimit,
+  total: Number(rawPagination?.total) || 0,
+  totalPages: Number(rawPagination?.totalPages) || 1,
+  hasNextPage: Boolean(rawPagination?.hasNextPage),
+  hasPrevPage: Boolean(rawPagination?.hasPrevPage)
+});
+
+const formatRelativeTime = (value, t) => {
+  if (!value) return t('gameDetail.relativeTime.justNow');
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return t('gameDetail.relativeTime.justNow');
+  const diffMs = Date.now() - date.getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return t('gameDetail.relativeTime.justNow');
+  if (minutes < 60) return t('gameDetail.relativeTime.minutesAgo', { count: minutes });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return t('gameDetail.relativeTime.hoursAgo', { count: hours });
+  const days = Math.floor(hours / 24);
+  if (days < 30) return t('gameDetail.relativeTime.daysAgo', { count: days });
+  return date.toLocaleDateString('en-US');
 };
 
 const getUrlHost = (value) => {
@@ -88,16 +116,21 @@ const normalizeScoreMessage = (raw) => {
 };
 
 export default function EmbeddedGame() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const { user, addGameHistory } = useAuth();
   const authUserId = user?._id || user?.id || null;
+  const currentUserId = authUserId;
   const telemetryStorageKey = authUserId
     ? `${TELEMETRY_STORAGE_KEY}.${authUserId}`
     : TELEMETRY_STORAGE_KEY;
   const { customGames, loading: gamesLoading } = useCustomGames();
   const game = customGames.find((g) => (g._id || g.id) === id);
   const gameId = game?._id || game?.id || id;
-  const gameUrl = typeof (game?.url || game?.embedUrl) === 'string'
+  const gameUrl = typeof (game?.embedUrl || game?.url) === 'string'
+    ? (game.embedUrl || game.url).trim()
+    : '';
+  const externalGameUrl = typeof (game?.url || game?.embedUrl) === 'string'
     ? (game.url || game.embedUrl).trim()
     : '';
   const vipLocked = Boolean(game?.vipLocked || (game?.vipOnly && !user?.isVip));
@@ -128,8 +161,36 @@ export default function EmbeddedGame() {
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [recommendationsError, setRecommendationsError] = useState('');
   const [recommendationSource, setRecommendationSource] = useState('');
+  const [comments, setComments] = useState([]);
+  const [commentsPagination, setCommentsPagination] = useState(normalizePagination());
+  const [commentsTotal, setCommentsTotal] = useState(0);
+  const [commentsSort, setCommentsSort] = useState('newest');
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentsError, setCommentsError] = useState('');
+  const [commentSuccess, setCommentSuccess] = useState('');
+  const [submitCommentLoading, setSubmitCommentLoading] = useState(false);
+  const [draftComment, setDraftComment] = useState('');
+  const [activeReplyTargetId, setActiveReplyTargetId] = useState('');
+  const [replyDrafts, setReplyDrafts] = useState({});
+  const [replySubmitLoadingId, setReplySubmitLoadingId] = useState('');
+  const [editTargetId, setEditTargetId] = useState('');
+  const [editDrafts, setEditDrafts] = useState({});
+  const [editSubmitLoadingId, setEditSubmitLoadingId] = useState('');
+  const [likeLoadingId, setLikeLoadingId] = useState('');
 
   const canUseIframe = Boolean(gameUrl) && (isTrustedUrl || allowUntrustedUrl);
+
+  const getAuthConfig = useCallback((config = {}) => {
+    const token = localStorage.getItem('token');
+    if (!token) return config;
+    return {
+      ...config,
+      headers: {
+        ...(config.headers || {}),
+        Authorization: `Bearer ${token}`
+      }
+    };
+  }, []);
 
   useEffect(() => {
     gameMetaRef.current = {
@@ -328,7 +389,7 @@ export default function EmbeddedGame() {
     clearIframeTimeout();
     iframeTimeoutRef.current = window.setTimeout(() => {
       setIsIframeLoading(false);
-      setLoadError('Game loading timed out. Please retry or open in a new tab.');
+      setLoadError(t('embeddedGame.timeoutError'));
       recordTelemetry('iframe_timeout', { timeoutMs: IFRAME_TIMEOUT_MS });
     }, IFRAME_TIMEOUT_MS);
     recordTelemetry('iframe_load_started', { iframeKey });
@@ -398,8 +459,8 @@ export default function EmbeddedGame() {
   }, [addGameHistory, recordTelemetry, user]);
 
   const handleOpenInNewTab = () => {
-    if (!gameUrl) return;
-    window.open(gameUrl, '_blank', 'noopener,noreferrer');
+    if (!externalGameUrl) return;
+    window.open(externalGameUrl, '_blank', 'noopener,noreferrer');
     recordTelemetry('open_new_tab_clicked');
   };
 
@@ -425,15 +486,206 @@ export default function EmbeddedGame() {
       setRecommendations(items);
       setRecommendationSource(typeof res.data?.source === 'string' ? res.data.source : '');
       if (items.length === 0) {
-        setRecommendationsError('Chưa có gợi ý phù hợp cho game này.');
+        setRecommendationsError(t('embeddedGame.noRecommendations'));
       }
     } catch (error) {
       setRecommendations([]);
-      setRecommendationsError(error?.response?.data?.message || 'Không thể tải gợi ý AI lúc này.');
+      setRecommendationsError(error?.response?.data?.message || t('embeddedGame.recommendationsError'));
     } finally {
       setRecommendationsLoading(false);
     }
   }, [gameId]);
+
+  const loadComments = useCallback(async ({ page = 1, sort = commentsSort } = {}) => {
+    if (!gameId) return;
+    try {
+      setCommentsLoading(true);
+      setCommentsError('');
+      const res = await axios.get(`${API_BASE_URL}/games/${gameId}/comments`, {
+        params: { page, limit: COMMENTS_PAGE_SIZE, sort }
+      });
+      setComments(Array.isArray(res.data?.comments) ? res.data.comments : []);
+      setCommentsPagination(normalizePagination(res.data?.pagination));
+      setCommentsTotal(Number(res.data?.totalComments) || Number(res.data?.pagination?.total) || 0);
+    } catch (error) {
+      setCommentsError(error?.response?.data?.message || t('embeddedGame.comments.loadError'));
+    } finally {
+      setCommentsLoading(false);
+    }
+  }, [commentsSort, gameId, t]);
+
+  const submitComment = useCallback(async ({ content, parentCommentId = '' } = {}) => {
+    const trimmed = typeof content === 'string' ? content.trim() : '';
+    if (!trimmed) {
+      setCommentsError(t('embeddedGame.comments.commentRequired'));
+      return { success: false };
+    }
+
+    try {
+      await axios.post(
+        `${API_BASE_URL}/games/${gameId}/comments`,
+        {
+          content: trimmed,
+          ...(parentCommentId ? { parentComment: parentCommentId } : {})
+        },
+        getAuthConfig()
+      );
+      return { success: true };
+    } catch (error) {
+      setCommentsError(error?.response?.data?.message || t('embeddedGame.comments.submitError'));
+      return { success: false };
+    }
+  }, [gameId, getAuthConfig, t]);
+
+  const handleSubmitComment = async () => {
+    setCommentsError('');
+    setCommentSuccess('');
+    if (!user) {
+      setCommentsError(t('embeddedGame.comments.loginRequired'));
+      return;
+    }
+
+    try {
+      setSubmitCommentLoading(true);
+      const result = await submitComment({ content: draftComment });
+      if (!result.success) return;
+      setDraftComment('');
+      setCommentSuccess(t('embeddedGame.comments.submitSuccess'));
+      await loadComments({ page: 1, sort: commentsSort });
+    } finally {
+      setSubmitCommentLoading(false);
+    }
+  };
+
+  const handleReplyInputChange = (commentId, value) => {
+    setReplyDrafts((prev) => ({ ...prev, [commentId]: value }));
+  };
+
+  const handleEditInputChange = (commentId, value) => {
+    setEditDrafts((prev) => ({ ...prev, [commentId]: value }));
+  };
+
+  const handleToggleEdit = (comment) => {
+    setCommentsError('');
+    setCommentSuccess('');
+    const commentId = comment.id;
+    if (editTargetId === commentId) {
+      setEditTargetId('');
+      return;
+    }
+    setEditTargetId(commentId);
+    setEditDrafts((prev) => ({ ...prev, [commentId]: comment.content || '' }));
+  };
+
+  const handleSubmitEdit = async (commentId) => {
+    setCommentsError('');
+    setCommentSuccess('');
+    if (!user) {
+      setCommentsError(t('embeddedGame.comments.loginRequired'));
+      return;
+    }
+    const content = editDrafts[commentId] || '';
+    const trimmed = content.trim();
+    if (!trimmed) {
+      setCommentsError(t('embeddedGame.comments.commentRequired'));
+      return;
+    }
+    try {
+      setEditSubmitLoadingId(commentId);
+      await axios.put(
+        `${API_BASE_URL}/games/${gameId}/comments/${commentId}`,
+        { content: trimmed },
+        getAuthConfig()
+      );
+      setEditTargetId('');
+      setCommentSuccess(t('embeddedGame.comments.editSuccess'));
+      await loadComments({ page: commentsPagination.page, sort: commentsSort });
+    } catch (error) {
+      setCommentsError(error?.response?.data?.message || t('embeddedGame.comments.editError'));
+    } finally {
+      setEditSubmitLoadingId('');
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    setCommentsError('');
+    setCommentSuccess('');
+    if (!user) {
+      setCommentsError(t('embeddedGame.comments.loginRequired'));
+      return;
+    }
+    const confirmed = window.confirm(t('embeddedGame.comments.deleteConfirm'));
+    if (!confirmed) return;
+    try {
+      await axios.delete(
+        `${API_BASE_URL}/games/${gameId}/comments/${commentId}`,
+        getAuthConfig()
+      );
+      setCommentSuccess(t('embeddedGame.comments.deleteSuccess'));
+      await loadComments({ page: commentsPagination.page, sort: commentsSort });
+    } catch (error) {
+      setCommentsError(error?.response?.data?.message || t('embeddedGame.comments.deleteError'));
+    }
+  };
+
+  const handleLikeComment = async (commentId) => {
+    if (!user) {
+      setCommentsError(t('embeddedGame.comments.loginRequired'));
+      return;
+    }
+    try {
+      setLikeLoadingId(commentId);
+      await axios.post(
+        `${API_BASE_URL}/games/${gameId}/comments/${commentId}/like`,
+        {},
+        getAuthConfig()
+      );
+      await loadComments({ page: commentsPagination.page, sort: commentsSort });
+    } catch (error) {
+      setCommentsError(error?.response?.data?.message || t('embeddedGame.comments.likeError'));
+    } finally {
+      setLikeLoadingId('');
+    }
+  };
+
+  const handleToggleReply = (commentId) => {
+    setCommentsError('');
+    setCommentSuccess('');
+    setActiveReplyTargetId((current) => (current === commentId ? '' : commentId));
+  };
+
+  const handleSubmitReply = async (commentId) => {
+    setCommentsError('');
+    setCommentSuccess('');
+    if (!user) {
+      setCommentsError(t('embeddedGame.comments.loginRequired'));
+      return;
+    }
+
+    const replyText = replyDrafts[commentId] || '';
+    try {
+      setReplySubmitLoadingId(commentId);
+      const result = await submitComment({ content: replyText, parentCommentId: commentId });
+      if (!result.success) return;
+      setReplyDrafts((prev) => ({ ...prev, [commentId]: '' }));
+      setActiveReplyTargetId('');
+      setCommentSuccess(t('embeddedGame.comments.replySuccess'));
+      await loadComments({ page: commentsPagination.page, sort: commentsSort });
+    } finally {
+      setReplySubmitLoadingId('');
+    }
+  };
+
+  useEffect(() => {
+    if (!commentSuccess) return undefined;
+    const timeout = setTimeout(() => setCommentSuccess(''), 3500);
+    return () => clearTimeout(timeout);
+  }, [commentSuccess]);
+
+  useEffect(() => {
+    if (!isIframeLoaded) return;
+    loadComments({ page: 1, sort: commentsSort });
+  }, [commentsSort, isIframeLoaded, loadComments]);
 
   const handleIframeLoaded = () => {
     clearIframeTimeout();
@@ -444,13 +696,14 @@ export default function EmbeddedGame() {
     const loadMs = iframeLoadStartRef.current ? Date.now() - iframeLoadStartRef.current : undefined;
     recordTelemetry('iframe_load_success', { loadMs });
     loadRecommendations();
+    loadComments({ page: 1, sort: commentsSort });
   };
 
   const handleIframeError = () => {
     clearIframeTimeout();
     setIsIframeLoading(false);
     setIsIframeLoaded(false);
-    setLoadError('Cannot load this game in iframe. Try opening it in a new tab.');
+    setLoadError(t('embeddedGame.loadError'));
     recordTelemetry('iframe_load_error');
   };
 
@@ -488,7 +741,7 @@ export default function EmbeddedGame() {
     return (
       <div className="min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center">
         <Navbar />
-        <p className="text-zinc-400">Loading game...</p>
+        <p className="text-zinc-400">{t('embeddedGame.loading')}</p>
       </div>
     );
   }
@@ -520,14 +773,14 @@ export default function EmbeddedGame() {
 
         {vipLocked ? (
           <div className="w-full max-w-4xl p-8 bg-zinc-900 rounded-xl border border-amber-500/30 text-center animate-fade-up" style={{ '--delay': '210ms' }}>
-            <h3 className="text-xl font-black text-amber-200 mb-2">VIP-only game</h3>
-            <p className="text-zinc-300 mb-6">You need an active VIP membership to play this title.</p>
+            <h3 className="text-xl font-black text-amber-200 mb-2">{t('embeddedGame.vipOnlyTitle')}</h3>
+            <p className="text-zinc-300 mb-6">{t('embeddedGame.vipOnlyDesc')}</p>
             <div className="flex flex-wrap justify-center gap-3">
               <Link to="/membership" className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 font-bold hover:opacity-90 transition-opacity">
-                Upgrade to VIP
+                {t('embeddedGame.upgradeVip')}
               </Link>
               <Link to={`/games/${gameId}`} className="px-5 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors font-bold text-white">
-                Back to Details
+                {t('embeddedGame.backToDetails')}
               </Link>
             </div>
           </div>
@@ -610,8 +863,8 @@ export default function EmbeddedGame() {
               {isIframeLoading && (
                 <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-zinc-950/75 backdrop-blur-sm">
                   <div className="w-10 h-10 rounded-full border-2 border-zinc-500 border-t-orange-400 animate-spin" />
-                  <p className="text-sm text-zinc-200">Loading embedded game...</p>
-                  <p className="text-xs text-zinc-500">Auto-timeout after {IFRAME_TIMEOUT_MS / 1000}s</p>
+                  <p className="text-sm text-zinc-200">{t('embeddedGame.loadingIframe')}</p>
+                  <p className="text-xs text-zinc-500">{t('embeddedGame.timeoutNote', { seconds: IFRAME_TIMEOUT_MS / 1000 })}</p>
                 </div>
               )}
 
@@ -632,7 +885,7 @@ export default function EmbeddedGame() {
                 onClick={handleRetry}
                 className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg font-bold transition-colors button-lift"
               >
-                Retry Load
+                {t('embeddedGame.retryLoad')}
               </button>
             )}
             {canUseIframe && (
@@ -641,7 +894,7 @@ export default function EmbeddedGame() {
                 onClick={toggleFullscreen}
                 className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg font-bold transition-colors button-lift"
               >
-                {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                {isFullscreen ? t('embeddedGame.exitFullscreen') : t('embeddedGame.fullscreen')}
               </button>
             )}
             <button
@@ -649,7 +902,7 @@ export default function EmbeddedGame() {
               onClick={handleOpenInNewTab}
               className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg font-bold transition-colors flex items-center gap-2 button-lift"
             >
-              Open in New Tab <span className="text-xs">↗</span>
+              {t('embeddedGame.openNewTab')} <span className="text-xs">↗</span>
             </button>
             {isIframeLoaded && (
               <span className="text-xs text-emerald-300">Live</span>
@@ -660,20 +913,20 @@ export default function EmbeddedGame() {
         <div className="w-full max-w-6xl mt-8 animate-fade-up" style={{ '--delay': '300ms' }}>
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
             <div className="flex items-center justify-between gap-3 mb-4">
-              <h3 className="text-lg font-bold">AI gợi ý game tương tự</h3>
+              <h3 className="text-lg font-bold">{t('embeddedGame.aiRecommendations')}</h3>
               <button
                 type="button"
                 onClick={loadRecommendations}
                 disabled={recommendationsLoading}
                 className="px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold transition-colors disabled:opacity-60"
               >
-                {recommendationsLoading ? 'Đang gợi ý...' : 'Làm mới gợi ý'}
+                {recommendationsLoading ? t('embeddedGame.gettingRecommendations') : t('embeddedGame.refreshRecommendations')}
               </button>
             </div>
 
             {recommendationSource && (
               <p className="text-[11px] text-zinc-500 mb-3">
-                Nguồn gợi ý: <span className="text-zinc-300 font-semibold uppercase">{recommendationSource}</span>
+                {t('embeddedGame.recommendationSource')} <span className="text-zinc-300 font-semibold uppercase">{recommendationSource}</span>
               </p>
             )}
 
@@ -700,7 +953,7 @@ export default function EmbeddedGame() {
                     </div>
                     <div className="p-3">
                       <p className="font-bold text-sm text-white truncate">{item.title}</p>
-                      <p className="text-[11px] text-zinc-400 mt-1 line-clamp-2">{item.reason || 'Gợi ý dựa trên sở thích chơi gần đây'}</p>
+                      <p className="text-[11px] text-zinc-400 mt-1 line-clamp-2">{item.reason || t('embeddedGame.recommendationReason')}</p>
                       <div className="flex items-center gap-2 mt-2 text-[10px] text-zinc-500">
                         {item.category && <span>{item.category}</span>}
                         {item.difficulty && <span>• {item.difficulty}</span>}
@@ -711,8 +964,263 @@ export default function EmbeddedGame() {
                 ))}
               </div>
             ) : !recommendationsLoading && !recommendationsError ? (
-              <p className="text-sm text-zinc-500">Chơi game rồi nhấn “Làm mới gợi ý” để lấy đề xuất tương tự.</p>
+              <p className="text-sm text-zinc-500">{t('embeddedGame.recommendationsHint')}</p>
             ) : null}
+          </div>
+        </div>
+
+        <div className="w-full max-w-6xl mt-8 animate-fade-up" style={{ '--delay': '340ms' }}>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <h3 className="text-lg font-bold">{t('embeddedGame.comments.title')}</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-500">{t('embeddedGame.comments.count', { count: commentsTotal })}</span>
+                <select
+                  value={commentsSort}
+                  onChange={(e) => setCommentsSort(e.target.value)}
+                  className="rounded-lg border border-zinc-700/60 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-200 focus:outline-none"
+                >
+                  {COMMENT_SORT_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{t(`gameDetail.sort.${opt}`)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-start">
+                <textarea
+                  value={draftComment}
+                  onChange={(e) => setDraftComment(e.target.value)}
+                  disabled={!user || submitCommentLoading}
+                  placeholder={user ? t('embeddedGame.comments.placeholder') : t('embeddedGame.comments.loginPlaceholder')}
+                  className="h-24 rounded-lg border border-zinc-700/60 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 resize-none disabled:opacity-60"
+                />
+                <button
+                  type="button"
+                  onClick={handleSubmitComment}
+                  disabled={!user || submitCommentLoading}
+                  className="px-4 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold transition-colors disabled:opacity-60"
+                >
+                  {submitCommentLoading ? t('embeddedGame.comments.submitting') : t('embeddedGame.comments.submit')}
+                </button>
+              </div>
+              {!user && (
+                <p className="text-xs text-zinc-500 mt-2">
+                  <Link to="/login" className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2">{t('embeddedGame.comments.loginCta')}</Link>
+                  {' '}{t('embeddedGame.comments.loginHint')}
+                </p>
+              )}
+              {commentSuccess && (
+                <p className="text-xs text-emerald-300 mt-2">{commentSuccess}</p>
+              )}
+              {commentsError && (
+                <p className="text-xs text-red-300 mt-2">{commentsError}</p>
+              )}
+            </div>
+
+            {commentsLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((item) => (
+                  <div key={item} className="h-20 rounded-xl bg-zinc-800/50 animate-pulse" />
+                ))}
+              </div>
+            ) : comments.length > 0 ? (
+              <div className="space-y-3">
+                {comments.map((comment) => {
+                  const commentUserId = comment?.user?.id || comment?.user?._id;
+                  const isMine = Boolean(currentUserId && commentUserId && String(commentUserId) === String(currentUserId));
+                  const username = comment?.user?.username || t('gameDetail.anonymous');
+                  const avatar = comment?.user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
+                  const hasVipFrame = Boolean(comment?.user?.isVip);
+                  const replies = Array.isArray(comment?.replies) ? comment.replies : [];
+                  const isReplyOpen = activeReplyTargetId === comment.id;
+                  const isEditOpen = editTargetId === comment.id;
+                  const likeCount = Number(comment?.likes) || 0;
+                  const likedBy = Array.isArray(comment?.likedBy) ? comment.likedBy : [];
+                  const isLiked = likedBy.includes(String(currentUserId));
+                  const isEdited = Boolean(comment?.isEdited);
+                  return (
+                    <div key={comment.id} className="rounded-xl border border-zinc-800 bg-zinc-950/50 px-4 py-3">
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-8 h-8 rounded-full border-2 bg-zinc-800 overflow-hidden vip-avatar-frame ${hasVipFrame ? 'is-vip vip-avatar-frame--sm border-amber-300/40' : isMine ? 'border-cyan-500/40' : 'border-white/10'}`}>
+                            <img src={avatar} alt={username} className="w-full h-full object-cover" />
+                            {hasVipFrame && (
+                              <>
+                                <span className="vip-avatar-gem vip-avatar-gem--tl" />
+                                <span className="vip-avatar-gem vip-avatar-gem--tr" />
+                                <span className="vip-avatar-gem vip-avatar-gem--bl" />
+                                <span className="vip-avatar-gem vip-avatar-gem--br" />
+                                <span className="vip-avatar-crown vip-avatar-crown--sm">👑</span>
+                              </>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-zinc-100 truncate">
+                              {username}
+                              {hasVipFrame ? <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-400/35 uppercase">VIP</span> : null}
+                              {isMine ? <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/25 uppercase">{t('gameDetail.comments.you')}</span> : null}
+                            </p>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] text-zinc-500">{formatRelativeTime(comment.updatedAt || comment.createdAt, t)}</span>
+                              {isEdited && <span className="text-[10px] text-zinc-500">({t('embeddedGame.comments.edited')})</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleLikeComment(comment.id)}
+                            disabled={likeLoadingId === comment.id}
+                            className={`flex items-center gap-1 text-[11px] font-semibold transition-colors ${isLiked ? 'text-pink-400 hover:text-pink-300' : 'text-zinc-400 hover:text-pink-400'}`}
+                          >
+                            <span>{isLiked ? '❤️' : '🤍'}</span>
+                            <span>{likeCount > 0 ? likeCount : ''}</span>
+                          </button>
+                          {isMine && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleEdit(comment)}
+                                className="text-[11px] text-zinc-400 hover:text-cyan-300 font-semibold transition-colors"
+                              >
+                                {t('embeddedGame.comments.edit')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteComment(comment.id)}
+                                className="text-[11px] text-zinc-400 hover:text-red-400 font-semibold transition-colors"
+                              >
+                                {t('embeddedGame.comments.delete')}
+                              </button>
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleReply(comment.id)}
+                            className="text-[11px] text-zinc-400 hover:text-cyan-300 font-semibold transition-colors"
+                          >
+                            {t('embeddedGame.comments.reply')}
+                          </button>
+                        </div>
+                      </div>
+
+                      {isEditOpen ? (
+                        <div className="pl-[42px] space-y-2">
+                          <textarea
+                            value={editDrafts[comment.id] || ''}
+                            onChange={(e) => handleEditInputChange(comment.id, e.target.value)}
+                            disabled={editSubmitLoadingId === comment.id}
+                            className="w-full h-20 rounded-lg border border-zinc-700/60 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 resize-none disabled:opacity-60"
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSubmitEdit(comment.id)}
+                              disabled={editSubmitLoadingId === comment.id}
+                              className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold transition-colors disabled:opacity-60"
+                            >
+                              {editSubmitLoadingId === comment.id ? t('embeddedGame.comments.saving') : t('embeddedGame.comments.save')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditTargetId('')}
+                              className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition-colors"
+                            >
+                              {t('embeddedGame.comments.cancel')}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-zinc-300 whitespace-pre-wrap pl-[42px]">{comment.content || ''}</p>
+                      )}
+
+                      {replies.length > 0 && (
+                        <div className="mt-3 pl-[42px] space-y-2">
+                          {replies.map((reply) => {
+                            const replyUserId = reply?.user?.id || reply?.user?._id;
+                            const isReplyMine = Boolean(currentUserId && replyUserId && String(replyUserId) === String(currentUserId));
+                            const replyUsername = reply?.user?.username || t('gameDetail.anonymous');
+                            const replyAvatar = reply?.user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(replyUsername)}`;
+                            const hasReplyVipFrame = Boolean(reply?.user?.isVip);
+                            return (
+                              <div key={reply.id} className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2.5">
+                                <div className="flex items-center gap-2 mb-1.5 min-w-0">
+                                  <div className={`w-6 h-6 rounded-full border bg-zinc-800 overflow-hidden vip-avatar-frame ${hasReplyVipFrame ? 'is-vip vip-avatar-frame--sm border-amber-300/40' : isReplyMine ? 'border-cyan-500/40' : 'border-white/10'}`}>
+                                    <img src={replyAvatar} alt={replyUsername} className="w-full h-full object-cover" />
+                                    {hasReplyVipFrame && <span className="vip-avatar-crown vip-avatar-crown--sm">👑</span>}
+                                  </div>
+                                  <p className="text-xs font-semibold text-zinc-100 truncate">
+                                    {replyUsername}
+                                    {isReplyMine ? <span className="ml-1 text-[9px] text-cyan-300">{t('gameDetail.comments.you')}</span> : null}
+                                  </p>
+                                  <span className="text-[10px] text-zinc-500 ml-auto">{formatRelativeTime(reply.updatedAt || reply.createdAt, t)}</span>
+                                </div>
+                                <p className="text-sm text-zinc-300 whitespace-pre-wrap pl-8">{reply.content || ''}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {isReplyOpen && (
+                        <div className="mt-3 pl-[42px] space-y-2">
+                          <textarea
+                            value={replyDrafts[comment.id] || ''}
+                            onChange={(e) => handleReplyInputChange(comment.id, e.target.value)}
+                            disabled={!user || replySubmitLoadingId === comment.id}
+                            placeholder={user ? t('embeddedGame.comments.replyPlaceholder') : t('embeddedGame.comments.loginPlaceholder')}
+                            className="w-full h-20 rounded-lg border border-zinc-700/60 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 resize-none disabled:opacity-60"
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSubmitReply(comment.id)}
+                              disabled={!user || replySubmitLoadingId === comment.id}
+                              className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold transition-colors disabled:opacity-60"
+                            >
+                              {replySubmitLoadingId === comment.id ? t('embeddedGame.comments.replying') : t('embeddedGame.comments.replySubmit')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveReplyTargetId('')}
+                              className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition-colors"
+                            >
+                              {t('embeddedGame.comments.cancelReply')}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500">{t('embeddedGame.comments.empty')}</p>
+            )}
+
+            {commentsPagination.totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => loadComments({ page: commentsPagination.page - 1, sort: commentsSort })}
+                  disabled={!commentsPagination.hasPrevPage || commentsLoading}
+                  className="px-3 py-2 rounded-lg bg-zinc-800 text-zinc-300 text-xs font-bold disabled:opacity-40"
+                >
+                  {t('embeddedGame.comments.previous')}
+                </button>
+                <span className="text-xs text-zinc-500">{commentsPagination.page} / {commentsPagination.totalPages}</span>
+                <button
+                  type="button"
+                  onClick={() => loadComments({ page: commentsPagination.page + 1, sort: commentsSort })}
+                  disabled={!commentsPagination.hasNextPage || commentsLoading}
+                  className="px-3 py-2 rounded-lg bg-zinc-800 text-zinc-300 text-xs font-bold disabled:opacity-40"
+                >
+                  {t('embeddedGame.comments.next')}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

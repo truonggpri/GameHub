@@ -98,6 +98,18 @@ export default function GameDetail() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [editTargetId, setEditTargetId] = useState('');
+  const [editDrafts, setEditDrafts] = useState({});
+  const [editSubmitLoadingId, setEditSubmitLoadingId] = useState('');
+  const [likeLoadingId, setLikeLoadingId] = useState('');
+  const [replyTargetId, setReplyTargetId] = useState('');
+  const [replyDrafts, setReplyDrafts] = useState({});
+  const [replySubmitLoadingId, setReplySubmitLoadingId] = useState('');
+  const [reviews, setReviews] = useState([]);
+  const [reviewsPagination, setReviewsPagination] = useState(DEFAULT_COMMENTS_PAGINATION);
+  const [reviewsSort, setReviewsSort] = useState('newest');
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState('');
 
   const game = gameDetail || customGames.find((item) => (item._id || item.id) === id);
   const gameId = game?._id || game?.id || id;
@@ -108,6 +120,8 @@ export default function GameDetail() {
   const averageRating = Number.isFinite(Number(reviewSummary.averageRating)) ? Number(reviewSummary.averageRating) : Number(game?.rating) || 0;
   const averageDisplay = Math.max(0, Math.min(5, Number(averageRating.toFixed(1))));
   const totalRatings = Number.isFinite(Number(reviewSummary.totalRatings)) ? Number(reviewSummary.totalRatings) : 0;
+  const playCount = Number.isFinite(Number(game?.playCount)) ? Number(game.playCount) : 0;
+  const likeCount = Number.isFinite(Number(game?.likeCount)) ? Number(game.likeCount) : 0;
   const currentUserId = user?._id || user?.id || null;
   const ratingBreakdown = useMemo(() => normalizeBreakdown(reviewSummary.breakdown), [reviewSummary.breakdown]);
   const gameTags = useMemo(() => {
@@ -174,17 +188,10 @@ export default function GameDetail() {
     try {
       setCommentsLoading(true);
       setCommentsError('');
-      const res = await axios.get(`${API_BASE_URL}/games/${id}/reviews`, { params: { page, limit: COMMENTS_PAGE_SIZE, sort } });
+      const res = await axios.get(`${API_BASE_URL}/games/${id}/comments`, { params: { page, limit: COMMENTS_PAGE_SIZE, sort } });
       const payload = res.data;
       setComments(Array.isArray(payload.comments) ? payload.comments : []);
       setCommentsPagination(normalizePagination(payload.pagination));
-      if (payload.reviewSummary) {
-        setReviewSummary({
-          averageRating: Number(payload.reviewSummary?.averageRating) || 0,
-          totalRatings: Number(payload.reviewSummary?.totalRatings) || 0,
-          breakdown: normalizeBreakdown(payload.reviewSummary?.breakdown)
-        });
-      }
     } catch (err) {
       setCommentsError(err?.response?.data?.message || t('gameDetail.comments.loadingFailed'));
     } finally {
@@ -194,6 +201,7 @@ export default function GameDetail() {
 
   useEffect(() => { loadGameDetail(); }, [id, user?._id, user?.id]);
   useEffect(() => { loadComments({ page: 1, sort: commentsSort }); }, [id, commentsSort]);
+  useEffect(() => { loadReviews({ page: 1, sort: reviewsSort }); }, [id, reviewsSort]);
 
   useEffect(() => {
     if (successMessage) {
@@ -201,6 +209,121 @@ export default function GameDetail() {
       return () => clearTimeout(t);
     }
   }, [successMessage]);
+
+  const handleLikeComment = async (commentId) => {
+    if (!user) { setError(t('gameDetail.comments.loginRequired')); return; }
+    try {
+      setLikeLoadingId(commentId);
+      await axios.post(`${API_BASE_URL}/games/${id}/comments/${commentId}/like`, {}, getAuthConfig());
+      await loadComments({ page: commentsPagination.page, sort: commentsSort });
+    } catch (err) {
+      setError(err?.response?.data?.message || t('gameDetail.comments.likeError'));
+    } finally {
+      setLikeLoadingId('');
+    }
+  };
+
+  const handleEditChange = (commentId, value) => {
+    setEditDrafts((prev) => ({ ...prev, [commentId]: value }));
+  };
+
+  const handleToggleEdit = (comment) => {
+    const commentId = comment.id;
+    if (editTargetId === commentId) {
+      setEditTargetId('');
+      return;
+    }
+    setEditTargetId(commentId);
+    setEditDrafts((prev) => ({ ...prev, [commentId]: comment.content || '' }));
+  };
+
+  const handleSubmitEdit = async (commentId) => {
+    if (!user) { setError(t('gameDetail.comments.loginRequired')); return; }
+    const content = editDrafts[commentId] || '';
+    const trimmed = content.trim();
+    if (!trimmed) { setError(t('gameDetail.comments.commentRequired')); return; }
+    try {
+      setEditSubmitLoadingId(commentId);
+      await axios.put(`${API_BASE_URL}/games/${id}/comments/${commentId}`, { content: trimmed }, getAuthConfig());
+      setEditTargetId('');
+      setSuccessMessage(t('gameDetail.comments.editSuccess'));
+      await loadComments({ page: commentsPagination.page, sort: commentsSort });
+    } catch (err) {
+      setError(err?.response?.data?.message || t('gameDetail.comments.editError'));
+    } finally {
+      setEditSubmitLoadingId('');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditTargetId('');
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!user) { setError(t('gameDetail.comments.loginRequired')); return; }
+    const confirmed = window.confirm(t('gameDetail.comments.deleteConfirm'));
+    if (!confirmed) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/games/${id}/comments/${commentId}`, getAuthConfig());
+      setSuccessMessage(t('gameDetail.comments.deleteSuccess'));
+      await loadComments({ page: commentsPagination.page, sort: commentsSort });
+    } catch (err) {
+      setError(err?.response?.data?.message || t('gameDetail.comments.deleteError'));
+    }
+  };
+
+  const handleReplyChange = (commentId, value) => {
+    setReplyDrafts((prev) => ({ ...prev, [commentId]: value }));
+  };
+
+  const handleToggleReply = (commentId) => {
+    setReplyTargetId((current) => (current === commentId ? '' : commentId));
+  };
+
+  const handleCancelReply = () => {
+    setReplyTargetId('');
+  };
+
+  const loadReviews = async ({ page = 1, sort = reviewsSort } = {}) => {
+    try {
+      setReviewsLoading(true);
+      setReviewsError('');
+      const res = await axios.get(`${API_BASE_URL}/games/${id}/reviews`, { params: { page, limit: COMMENTS_PAGE_SIZE, sort } });
+      const payload = res.data;
+      setReviews(Array.isArray(payload.comments) ? payload.comments : []);
+      setReviewsPagination(normalizePagination(payload.pagination));
+      if (payload.reviewSummary) {
+        setReviewSummary({
+          averageRating: Number(payload.reviewSummary?.averageRating) || 0,
+          totalRatings: Number(payload.reviewSummary?.totalRatings) || 0,
+          breakdown: normalizeBreakdown(payload.reviewSummary?.breakdown)
+        });
+      }
+    } catch (err) {
+      setReviewsError(err?.response?.data?.message || t('gameDetail.reviews.loadingFailed'));
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  const handleSubmitReply = async (parentCommentId) => {
+    if (!user) { setError(t('gameDetail.comments.loginRequired')); return; }
+    const content = replyDrafts[parentCommentId] || '';
+    const trimmed = content.trim();
+    if (!trimmed) { setError(t('gameDetail.comments.commentRequired')); return; }
+    try {
+      setReplySubmitLoadingId(parentCommentId);
+      await axios.post(`${API_BASE_URL}/games/${id}/comments`, { content: trimmed, parentComment: parentCommentId }, getAuthConfig());
+      setReplyTargetId('');
+      setReplyDrafts((prev) => ({ ...prev, [parentCommentId]: '' }));
+      setSuccessMessage(t('gameDetail.comments.replySuccess'));
+      await loadComments({ page: commentsPagination.page, sort: commentsSort });
+    } catch (err) {
+      setError(err?.response?.data?.message || t('gameDetail.comments.submitError'));
+    } finally {
+      setReplySubmitLoadingId('');
+    }
+  };
 
   const handleSubmitReview = async () => {
     setError('');
@@ -321,6 +444,12 @@ export default function GameDetail() {
                     ★ {averageDisplay} · {t('gameDetail.ratingsCount', { count: totalRatings })}
                   </span>
                 )}
+                <span className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-cyan-500/15 border border-cyan-500/25 text-cyan-300">
+                  ▶ {playCount} {t('gameCard.plays')}
+                </span>
+                <span className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-rose-500/15 border border-rose-500/25 text-rose-300">
+                  ❤ {likeCount} {t('gameCard.likes')}
+                </span>
                 {canPlay && (
                   <span className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400">{t('gameDetail.playable')}</span>
                 )}
@@ -530,6 +659,80 @@ export default function GameDetail() {
               </div>
             </div>
 
+            {/* Reviews List */}
+            <div className="rounded-2xl border border-white/8 bg-zinc-900/60 backdrop-blur-sm p-5 md:p-7 animate-fade-up" style={{ '--delay': '180ms' }}>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <span className="text-amber-400">⭐</span> {t('gameDetail.reviews.title')}
+                  <span className="text-xs font-normal text-zinc-500 ml-1">{t('gameDetail.reviews.count', { count: reviewsPagination.total })}</span>
+                </h2>
+                <select
+                  value={reviewsSort}
+                  onChange={(e) => setReviewsSort(e.target.value)}
+                  className="rounded-xl border border-zinc-700/60 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30"
+                >
+                  {REVIEW_SORT_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{t(`gameDetail.sort.${opt}`)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {reviewsError && (
+                <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                  {reviewsError}
+                </div>
+              )}
+
+              {reviewsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="rounded-xl bg-zinc-800/40 h-24 animate-pulse" />
+                  ))}
+                </div>
+              ) : reviews.length > 0 ? (
+                <div className="space-y-3">
+                  {reviews.map((review, index) => (
+                    <ReviewCard
+                      key={review.id}
+                      review={review}
+                      isMine={Boolean(currentUserId && review?.user?.id && String(review.user.id) === String(currentUserId))}
+                      index={index}
+                      t={t}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-3xl mb-2">⭐</div>
+                  <p className="text-zinc-500 text-sm">{t('gameDetail.reviews.empty')}</p>
+                </div>
+              )}
+
+              {reviewsPagination.totalPages > 1 && (
+                <div className="mt-5 flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => loadReviews({ page: reviewsPagination.page - 1, sort: reviewsSort })}
+                    disabled={!reviewsPagination.hasPrevPage || reviewsLoading}
+                    className="px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-30 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700"
+                  >
+                    {t('gameDetail.reviews.previous')}
+                  </button>
+                  <span className="text-xs text-zinc-500 font-medium">
+                    {reviewsPagination.page} / {reviewsPagination.totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => loadReviews({ page: reviewsPagination.page + 1, sort: reviewsSort })}
+                    disabled={!reviewsPagination.hasNextPage || reviewsLoading}
+                    className="px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-30 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700"
+                  >
+                    {t('gameDetail.reviews.next')}
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Comments List */}
             <div className="rounded-2xl border border-white/8 bg-zinc-900/60 backdrop-blur-sm p-5 md:p-7 animate-fade-up" style={{ '--delay': '200ms' }}>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
@@ -568,6 +771,25 @@ export default function GameDetail() {
                       comment={comment}
                       isMine={Boolean(currentUserId && comment?.user?.id && String(comment.user.id) === String(currentUserId))}
                       index={index}
+                      currentUserId={currentUserId}
+                      onLike={handleLikeComment}
+                      onEdit={handleToggleEdit}
+                      onDelete={handleDeleteComment}
+                      onReply={handleToggleReply}
+                      likeLoadingId={likeLoadingId}
+                      editTargetId={editTargetId}
+                      editDrafts={editDrafts}
+                      onEditChange={handleEditChange}
+                      onSubmitEdit={handleSubmitEdit}
+                      onCancelEdit={handleCancelEdit}
+                      editSubmitLoadingId={editSubmitLoadingId}
+                      replyTargetId={replyTargetId}
+                      replyDrafts={replyDrafts}
+                      onReplyChange={handleReplyChange}
+                      onSubmitReply={handleSubmitReply}
+                      onCancelReply={handleCancelReply}
+                      replySubmitLoadingId={replySubmitLoadingId}
+                      t={t}
                     />
                   ))}
                 </div>
@@ -721,14 +943,203 @@ function RatingBar({ stars, count, total }) {
   );
 }
 
-function CommentCard({ comment, isMine = false, index = 0 }) {
-  const { t } = useTranslation();
+function CommentCard({ comment, isMine = false, index = 0, currentUserId, onLike, onEdit, onDelete, onReply, likeLoadingId, editTargetId, editDrafts, onEditChange, onSubmitEdit, onCancelEdit, editSubmitLoadingId, replyTargetId, replyDrafts, onReplyChange, onSubmitReply, onCancelReply, replySubmitLoadingId, t }) {
   const username = comment?.user?.username || t('gameDetail.anonymous');
   const avatar = comment?.user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
   const hasVipFrame = Boolean(comment?.user?.isVip);
-  const rating = Math.max(1, Math.min(5, Number(comment?.rating) || 1));
   const time = formatRelativeTime(comment?.updatedAt || comment?.createdAt, t);
-  const content = comment?.comment || '';
+  const content = comment?.content || '';
+  const likeCount = Number(comment?.likes) || 0;
+  const likedBy = Array.isArray(comment?.likedBy) ? comment.likedBy : [];
+  const isLiked = likedBy.includes(String(currentUserId));
+  const isEdited = Boolean(comment?.isEdited);
+  const isReply = Boolean(comment?.parentComment);
+  const replies = Array.isArray(comment?.replies) ? comment.replies : [];
+  const isEditOpen = editTargetId === comment.id;
+  const isReplyOpen = replyTargetId === comment.id;
+
+  return (
+    <div
+      className={`rounded-xl p-4 animate-card-enter transition-all ${
+        isMine && !isReply
+          ? 'border border-cyan-500/20 bg-cyan-500/5'
+          : isReply
+          ? 'border border-zinc-800 bg-zinc-900/70'
+          : 'border border-white/6 bg-zinc-950/40'
+      }`}
+      style={{ '--delay': `${Math.min(index, 8) * 40}ms` }}
+    >
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className={`w-8 h-8 rounded-full border-2 bg-zinc-800 overflow-hidden vip-avatar-frame ${hasVipFrame ? 'is-vip vip-avatar-frame--sm border-amber-300/40' : isMine ? 'border-cyan-500/40' : 'border-white/10'}`}>
+            <img src={avatar} alt={username} className="w-full h-full object-cover" />
+            {hasVipFrame && (
+              <>
+                <span className="vip-avatar-gem vip-avatar-gem--tl" />
+                <span className="vip-avatar-gem vip-avatar-gem--tr" />
+                <span className="vip-avatar-gem vip-avatar-gem--bl" />
+                <span className="vip-avatar-gem vip-avatar-gem--br" />
+                <span className="vip-avatar-crown vip-avatar-crown--sm">👑</span>
+              </>
+            )}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="font-bold text-sm truncate">{username}</span>
+              {hasVipFrame && (
+                <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-400/35 uppercase">VIP</span>
+              )}
+              {isMine && (
+                <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/25 uppercase">{t('gameDetail.comments.you')}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-600">{time}</span>
+              {isEdited && <span className="text-[9px] text-zinc-500">({t('gameDetail.comments.edited')})</span>}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => onLike(comment.id)}
+            disabled={likeLoadingId === comment.id}
+            className={`flex items-center gap-1 text-[11px] font-semibold transition-colors ${isLiked ? 'text-pink-400 hover:text-pink-300' : 'text-zinc-500 hover:text-pink-400'}`}
+          >
+            <span>{isLiked ? '❤️' : '🤍'}</span>
+            <span>{likeCount > 0 ? likeCount : ''}</span>
+          </button>
+          {!isReply && (
+            <button
+              type="button"
+              onClick={() => onReply(comment.id)}
+              className="text-[11px] text-zinc-500 hover:text-cyan-300 font-semibold transition-colors"
+            >
+              {t('gameDetail.comments.reply')}
+            </button>
+          )}
+          {isMine && (
+            <>
+              <button
+                type="button"
+                onClick={() => onEdit(comment)}
+                className="text-[11px] text-zinc-500 hover:text-cyan-300 font-semibold transition-colors"
+              >
+                {t('gameDetail.comments.edit')}
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(comment.id)}
+                className="text-[11px] text-zinc-500 hover:text-red-400 font-semibold transition-colors"
+              >
+                {t('gameDetail.comments.delete')}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {isEditOpen ? (
+        <div className="pl-[42px] space-y-2">
+          <textarea
+            value={editDrafts[comment.id] || ''}
+            onChange={(e) => onEditChange(comment.id, e.target.value)}
+            disabled={editSubmitLoadingId === comment.id}
+            className="w-full h-20 rounded-lg border border-zinc-700/60 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 resize-none disabled:opacity-60"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onSubmitEdit(comment.id)}
+              disabled={editSubmitLoadingId === comment.id}
+              className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold transition-colors disabled:opacity-60"
+            >
+              {editSubmitLoadingId === comment.id ? t('gameDetail.comments.saving') : t('gameDetail.comments.save')}
+            </button>
+            <button
+              type="button"
+              onClick={() => onCancelEdit()}
+              className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition-colors"
+            >
+              {t('gameDetail.comments.cancel')}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-zinc-300 leading-relaxed pl-[42px]">{content}</p>
+      )}
+
+      {isReplyOpen && !isReply && (
+        <div className="mt-3 pl-[42px] space-y-2">
+          <textarea
+            value={replyDrafts[comment.id] || ''}
+            onChange={(e) => onReplyChange(comment.id, e.target.value)}
+            disabled={replySubmitLoadingId === comment.id}
+            placeholder={t('gameDetail.comments.replyPlaceholder')}
+            className="w-full h-20 rounded-lg border border-zinc-700/60 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 resize-none disabled:opacity-60"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onSubmitReply(comment.id)}
+              disabled={replySubmitLoadingId === comment.id}
+              className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold transition-colors disabled:opacity-60"
+            >
+              {replySubmitLoadingId === comment.id ? t('gameDetail.comments.replying') : t('gameDetail.comments.replySubmit')}
+            </button>
+            <button
+              type="button"
+              onClick={() => onCancelReply()}
+              className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition-colors"
+            >
+              {t('gameDetail.comments.cancelReply')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {replies.length > 0 && !isReply && (
+        <div className="mt-3 pl-[42px] space-y-2">
+          {replies.map((reply, idx) => (
+            <CommentCard
+              key={reply.id}
+              comment={reply}
+              isMine={Boolean(currentUserId && reply?.user?.id && String(reply.user.id) === String(currentUserId))}
+              index={idx}
+              currentUserId={currentUserId}
+              onLike={onLike}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onReply={onReply}
+              likeLoadingId={likeLoadingId}
+              editTargetId={editTargetId}
+              editDrafts={editDrafts}
+              onEditChange={onEditChange}
+              onSubmitEdit={onSubmitEdit}
+              onCancelEdit={onCancelEdit}
+              editSubmitLoadingId={editSubmitLoadingId}
+              replyTargetId={replyTargetId}
+              replyDrafts={replyDrafts}
+              onReplyChange={onReplyChange}
+              onSubmitReply={onSubmitReply}
+              onCancelReply={onCancelReply}
+              replySubmitLoadingId={replySubmitLoadingId}
+              t={t}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewCard({ review, isMine = false, index = 0, t }) {
+  const username = review?.user?.username || t('gameDetail.anonymous');
+  const avatar = review?.user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
+  const hasVipFrame = Boolean(review?.user?.isVip);
+  const rating = Math.max(1, Math.min(5, Number(review?.rating) || 1));
+  const time = formatRelativeTime(review?.updatedAt || review?.createdAt, t);
+  const content = review?.comment || '';
 
   return (
     <div

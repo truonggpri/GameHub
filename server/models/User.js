@@ -5,6 +5,8 @@ const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   email: { type: String, unique: true, sparse: true, trim: true, lowercase: true },
   password: { type: String, required: true },
+  googleId: { type: String, unique: true, sparse: true, trim: true },
+  authProvider: { type: String, enum: ['local', 'google'], default: 'local' },
   avatar: { type: String, default: '' },
   role: { type: String, enum: ['admin', 'mod', 'user'], default: 'user' },
   isAdmin: { type: Boolean, default: false }, // Legacy field, kept for compatibility
@@ -12,6 +14,7 @@ const userSchema = new mongoose.Schema({
   deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   vipTier: { type: String, enum: ['free', 'vip'], default: 'free' },
   vipExpiresAt: { type: Date, default: null },
+  stripeCustomerId: { type: String, default: null },
   favorites: [{ type: String }], // Array of game IDs
   createdAt: { type: Date, default: Date.now }
 });

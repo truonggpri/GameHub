@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import axios from 'axios';
 
 export default function Navbar() {
   const location = useLocation();
@@ -10,6 +11,7 @@ export default function Navbar() {
   const isActive = (path) => location.pathname === path;
   const [scrolled, setScrolled] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [openSupportCount, setOpenSupportCount] = useState(0);
 
   const toggleLanguage = () => {
     const nextLang = i18n.language === 'en' ? 'vi' : 'en';
@@ -22,6 +24,32 @@ export default function Navbar() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    if (user?.role !== 'admin') {
+      setOpenSupportCount(0);
+      return undefined;
+    }
+
+    const fetchOpenTicketCount = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const res = await axios.get('http://localhost:5000/api/support/tickets', {
+          params: { status: 'open' },
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const items = Array.isArray(res.data) ? res.data : [];
+        setOpenSupportCount(items.length);
+      } catch {
+        setOpenSupportCount(0);
+      }
+    };
+
+    fetchOpenTicketCount();
+    const timer = window.setInterval(fetchOpenTicketCount, 10000);
+    return () => window.clearInterval(timer);
+  }, [user?.role]);
 
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -76,6 +104,16 @@ export default function Navbar() {
         <div className="flex items-center gap-2 relative z-10">
           <NavLink to="/" active={isActive('/')}>{t('nav.home')}</NavLink>
           {user && <NavLink to="/membership" active={isActive('/membership')}>VIP</NavLink>}
+          {user && (
+            <div className="relative">
+              <NavLink to="/support" active={isActive('/support')}>Support</NavLink>
+              {user.role === 'admin' && openSupportCount > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 rounded-full border border-red-300/50 bg-red-500 text-white text-[10px] font-black grid place-items-center leading-none">
+                  {openSupportCount > 99 ? '99+' : openSupportCount}
+                </span>
+              )}
+            </div>
+          )}
           {['admin', 'mod'].includes(user?.role) && <NavLink to="/add-game" active={isActive('/add-game')}>{t('nav.addGame')}</NavLink>}
           {['admin', 'mod'].includes(user?.role) && <NavLink to="/admin" active={isActive('/admin')}>{t('nav.admin')}</NavLink>}
         </div>

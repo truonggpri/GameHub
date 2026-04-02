@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Score = require('../models/Score');
+const Game = require('../models/Game');
 const jwt = require('jsonwebtoken');
 
 const auth = (req, res, next) => {
@@ -16,6 +17,13 @@ const auth = (req, res, next) => {
 };
 
 const TERMINAL_ACTIVITY_TYPES = new Set([
+  'match_end',
+  'game_result',
+  'session_end',
+  'completed'
+]);
+
+const PLAY_COUNT_ACTIVITY_TYPES = new Set([
   'match_end',
   'game_result',
   'session_end',
@@ -45,6 +53,11 @@ const isMatchRecord = (item) => {
   const activityType = normalizeActivityType(item?.activityType);
   if (result === 'win' || result === 'lose' || result === 'draw') return true;
   return TERMINAL_ACTIVITY_TYPES.has(activityType);
+};
+
+const isSessionEndRecord = (item) => {
+  const activityType = normalizeActivityType(item?.activityType);
+  return PLAY_COUNT_ACTIVITY_TYPES.has(activityType);
 };
 
 const toDayKey = (value) => {
@@ -113,6 +126,14 @@ router.post('/', auth, async (req, res) => {
       metadata: metadata && typeof metadata === 'object' ? metadata : {}
     });
     await newScore.save();
+
+    if (isSessionEndRecord(newScore)) {
+      await Game.updateOne(
+        { _id: gameId },
+        { $inc: { playCount: 1 } }
+      );
+    }
+
     res.status(201).json(newScore);
   } catch (err) {
     res.status(500).json({ message: err.message });

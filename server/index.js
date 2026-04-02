@@ -99,6 +99,7 @@ app.use('/api/games', require('./routes/games'));
 app.use('/api/scores', require('./routes/scores'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/ai', require('./routes/ai'));
+app.use('/api/support', require('./routes/support'));
 
 const PORT = process.env.PORT || 5000;
 

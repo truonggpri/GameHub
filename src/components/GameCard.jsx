@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const difficultyConfig = {
   Easy:   { color: 'text-emerald-400', bg: 'bg-emerald-500/15', border: 'border-emerald-500/25', icon: '🟢' },
@@ -16,6 +17,7 @@ const formatDate = (dateStr) => {
 };
 
 export default function GameCard({ game, isFavorite, onToggleFavorite, onTagClick, index = 0 }) {
+  const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [glarePos, setGlarePos] = useState({ x: 50, y: 50 });
@@ -35,6 +37,8 @@ export default function GameCard({ game, isFavorite, onToggleFavorite, onTagClic
   const controls = game.controls || '';
   const version = game.version || '';
   const rating = game.rating ? Number(game.rating) : 0;
+  const playCount = Number.isFinite(Number(game.playCount)) ? Number(game.playCount) : 0;
+  const likeCount = Number.isFinite(Number(game.likeCount)) ? Number(game.likeCount) : 0;
   const addedDate = formatDate(game.createdAt);
   const vipOnly = Boolean(game.vipOnly);
   const vipLocked = Boolean(game.vipLocked);
@@ -67,11 +71,11 @@ export default function GameCard({ game, isFavorite, onToggleFavorite, onTagClic
 
   // Build info items from real data only
   const infoItems = [];
-  if (players)    infoItems.push({ icon: '👥', label: 'Players', value: players });
-  if (controls)   infoItems.push({ icon: '🎮', label: 'Controls', value: controls });
-  if (publisher)  infoItems.push({ icon: '🏢', label: 'Publisher', value: publisher });
-  if (version)    infoItems.push({ icon: '📦', label: 'Version', value: version });
-  if (addedDate)  infoItems.push({ icon: '📅', label: 'Added', value: addedDate });
+  if (players)    infoItems.push({ icon: '👥', label: t('gameCard.players'), value: players });
+  if (controls)   infoItems.push({ icon: '🎮', label: t('gameCard.controls'), value: controls });
+  if (publisher)  infoItems.push({ icon: '🏢', label: t('gameCard.publisher'), value: publisher });
+  if (version)    infoItems.push({ icon: '📦', label: t('gameCard.version'), value: version });
+  if (addedDate)  infoItems.push({ icon: '📅', label: t('gameCard.added'), value: addedDate });
 
   return (
     <article
@@ -222,6 +226,8 @@ export default function GameCard({ game, isFavorite, onToggleFavorite, onTagClic
                 {rating > 0 && (
                   <span className="text-[10px] font-bold text-amber-400">★ {rating.toFixed(1)}</span>
                 )}
+                <span className="text-[10px] text-zinc-300">▶ {playCount}</span>
+                <span className="text-[10px] text-rose-300">❤ {likeCount}</span>
                 {category && (
                   <span className="text-[10px] text-zinc-400">{category}</span>
                 )}
@@ -255,7 +261,7 @@ export default function GameCard({ game, isFavorite, onToggleFavorite, onTagClic
               {/* Publisher line */}
               {publisher && (
                 <p className="text-[10px] text-zinc-500 mb-1.5 truncate">
-                  by <span className="text-zinc-300 font-medium">{publisher}</span>
+                  {t('gameCard.by')} <span className="text-zinc-300 font-medium">{publisher}</span>
                 </p>
               )}
 
@@ -298,6 +304,15 @@ export default function GameCard({ game, isFavorite, onToggleFavorite, onTagClic
                 </div>
               )}
 
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-[9px] font-bold text-cyan-300">
+                  {t('gameCard.plays')}: {playCount}
+                </span>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-[9px] font-bold text-rose-300">
+                  {t('gameCard.likes')}: {likeCount}
+                </span>
+              </div>
+
               {/* Tags */}
               {visibleTags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mb-2.5">
@@ -331,7 +346,7 @@ export default function GameCard({ game, isFavorite, onToggleFavorite, onTagClic
                 <svg className="relative z-10 w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z" />
                 </svg>
-                <span className="relative z-10">{vipLocked ? 'VIP Access' : 'Play Now'}</span>
+                <span className="relative z-10">{vipLocked ? t('gameCard.vipAccess') : t('gameCard.playNow')}</span>
               </Link>
             </div>
           </div>

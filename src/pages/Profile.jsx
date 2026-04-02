@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import { useCustomGames } from '../context/CustomGamesContext';
@@ -55,6 +56,7 @@ const INITIAL_REVIEW_SUMMARY = {
 const REVIEW_SORT_OPTIONS = ['newest', 'oldest', 'highest', 'lowest'];
 
 export default function Profile() {
+  const { t } = useTranslation();
   const { user, loading: authLoading, logout, updateProfile, uploadAvatar } = useAuth();
   const authUserId = user?._id || user?.id || '';
   const telemetryStorageKey = authUserId
@@ -90,7 +92,7 @@ export default function Profile() {
       const id = game._id || game.id;
       if (!id) return;
       map.set(id, {
-        title: game.title || normalizeGameName(id),
+        title: game.title || normalizeGameNameLocalized(id),
         image: game.imageUrl || game.image || ''
       });
     });
@@ -213,7 +215,7 @@ export default function Profile() {
           kind: 'match',
           gameId: entry.gameId,
           timestamp: entry.date,
-          title: gameMeta?.title || normalizeGameName(entry.gameId),
+          title: gameMeta?.title || normalizeGameNameLocalized(entry.gameId),
           result: entry.result || 'completed',
           score: entry.score,
           durationSeconds: entry.durationSeconds || 0,
@@ -232,7 +234,7 @@ export default function Profile() {
           kind: 'embed',
           gameId: event.gameId,
           timestamp: event.timestamp,
-          title: gameMeta?.title || event.title || normalizeGameName(event.gameId),
+          title: gameMeta?.title || event.title || normalizeGameNameLocalized(event.gameId),
           eventName: event.eventName || 'event'
         };
       }),
@@ -312,7 +314,35 @@ export default function Profile() {
   const previousLevelTarget = (playerLevel - 1) * 8;
   const levelProgressRaw = ((summary.totalMatches - previousLevelTarget) / Math.max(nextLevelTarget - previousLevelTarget, 1)) * 100;
   const levelProgress = Math.max(0, Math.min(100, Math.round(levelProgressRaw)));
-  const rankTitle = getRankTitle(playerLevel);
+  const rankTitle = useMemo(() => {
+    if (playerLevel >= 26) return t('profile.mythicOverlord');
+    if (playerLevel >= 20) return t('profile.diamondCommander');
+    if (playerLevel >= 14) return t('profile.platinumStriker');
+    if (playerLevel >= 9) return t('profile.goldHunter');
+    if (playerLevel >= 5) return t('profile.silverRaider');
+    return t('profile.rookie');
+  }, [playerLevel, t]);
+
+  const normalizeGameNameLocalized = useCallback((value) => {
+    if (!value) return t('profile.unknownGame');
+    if (/^[a-f0-9]{24}$/i.test(value)) return t('profile.gameNumber', { number: value.slice(-6) });
+    return value.replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+  }, [t]);
+
+  const formatRelativeTimeLocalized = useCallback((value) => {
+    if (!value) return t('profile.justNow');
+    const timestamp = new Date(value).getTime();
+    if (Number.isNaN(timestamp)) return t('profile.justNow');
+    const diffMs = Date.now() - timestamp;
+    const diffMinutes = Math.floor(diffMs / 60000);
+    if (diffMinutes < 1) return t('profile.justNow');
+    if (diffMinutes < 60) return t('profile.minutesAgo', { count: diffMinutes });
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return t('profile.hoursAgo', { count: diffHours });
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 30) return t('profile.daysAgo', { count: diffDays });
+    return new Date(value).toLocaleDateString();
+  }, [t]);
 
   const getGameLink = (gameId) => {
     if (!gameId) return '/';
@@ -435,8 +465,8 @@ export default function Profile() {
               </div>
 
               <div className="text-sm text-zinc-300/90 flex flex-wrap items-center gap-x-5 gap-y-1">
-                <span>Member since: {memberSince}</span>
-                <span>Last activity: {summary.lastActivityAt ? formatRelativeTime(summary.lastActivityAt) : 'No activity yet'}</span>
+                <span>{t('profile.memberSince')}: {memberSince}</span>
+                <span>{t('profile.lastActivity')}: {summary.lastActivityAt ? formatRelativeTimeLocalized(summary.lastActivityAt) : t('profile.noActivities')}</span>
                 {user.email && <span>{user.email}</span>}
               </div>
 
@@ -511,7 +541,7 @@ export default function Profile() {
               </label>
 
               <label className="block">
-                <span className="text-[11px] uppercase tracking-wider text-zinc-400">Avatar URL (optional)</span>
+                <span className="text-[11px] uppercase tracking-wider text-zinc-400">{t('profile.avatarUrl')}</span>
                 <input
                   type="url"
                   value={profileForm.avatar}
@@ -522,7 +552,7 @@ export default function Profile() {
               </label>
 
               <label className="block">
-                <span className="text-[11px] uppercase tracking-wider text-zinc-400">Upload avatar from device</span>
+                <span className="text-[11px] uppercase tracking-wider text-zinc-400">{t('profile.uploadAvatar')}</span>
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/gif"
@@ -530,7 +560,7 @@ export default function Profile() {
                   disabled={avatarUploading}
                   className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-300 file:mr-3 file:rounded-md file:border-0 file:bg-cyan-500/20 file:px-3 file:py-1 file:text-cyan-100 hover:file:bg-cyan-500/30"
                 />
-                <p className="mt-1 text-[11px] text-zinc-500">PNG/JPG/WEBP/GIF, tối đa 3MB.</p>
+                <p className="mt-1 text-[11px] text-zinc-500">{t('profile.fileSizeLimit')}</p>
               </label>
 
               <div className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 flex items-center gap-3">
@@ -551,8 +581,8 @@ export default function Profile() {
                   )}
                 </div>
                 <div className="text-xs text-zinc-400">
-                  <div className="font-semibold text-zinc-200">Avatar preview</div>
-                  <div>{avatarUploading ? 'Uploading...' : hasVipFrame ? 'VIP frame active' : 'Ready'}</div>
+                  <div className="font-semibold text-zinc-200">{t('profile.avatarPreview')}</div>
+                  <div>{avatarUploading ? t('profile.saving') : hasVipFrame ? t('profile.vipFrameActive') : t('profile.ready')}</div>
                 </div>
               </div>
 
@@ -561,7 +591,7 @@ export default function Profile() {
                 disabled={profileSaving || avatarUploading}
                 className="px-5 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-zinc-950 font-bold transition-colors disabled:opacity-60"
               >
-                {profileSaving ? 'Saving...' : 'Save'}
+                {profileSaving ? t('profile.saving') : t('profile.save')}
               </button>
             </form>
           )}
@@ -570,9 +600,9 @@ export default function Profile() {
         {error && <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300">{error}</div>}
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-up" style={{ '--delay': '90ms' }}>
-          <MetricCard icon="🎯" label="Sessions" value={summary.totalMatches} accent="text-cyan-100" tone="from-cyan-500/30 to-blue-500/10" />
-          <MetricCard icon="" label="Current Streak" value={`${currentStreakDays}d`} accent="text-orange-100" tone="from-orange-500/30 to-rose-500/10" />
-          <MetricCard icon="🏅" label="Longest Streak" value={`${longestStreakDays}d`} accent="text-pink-100" tone="from-pink-500/30 to-fuchsia-500/10" />
+          <MetricCard icon="🎯" label={t('profile.sessions')} value={summary.totalMatches} accent="text-cyan-100" tone="from-cyan-500/30 to-blue-500/10" />
+          <MetricCard icon="" label={t('profile.currentStreak')} value={`${currentStreakDays}d`} accent="text-orange-100" tone="from-orange-500/30 to-rose-500/10" />
+          <MetricCard icon="🏅" label={t('profile.longestStreak')} value={`${longestStreakDays}d`} accent="text-pink-100" tone="from-pink-500/30 to-fuchsia-500/10" />
         </section>
 
         <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -580,9 +610,9 @@ export default function Profile() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 to-fuchsia-200">
-                  BATTLE LOG
+                  {t('profile.battleLog')}
                 </h2>
-                <p className="text-xs text-zinc-400 uppercase tracking-wider">Recent gameplay & embed actions</p>
+                <p className="text-xs text-zinc-400 uppercase tracking-wider">{t('profile.recentGameplay')}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {['all', 'sessions', 'embed'].map((filterKey) => (
@@ -595,7 +625,7 @@ export default function Profile() {
                         : 'text-zinc-300 border-zinc-600 hover:border-cyan-400/50 hover:text-cyan-100'
                     }`}
                   >
-                    {filterLabel(filterKey)}
+                    {t(`profile.${filterKey}`)}
                   </button>
                 ))}
               </div>
@@ -603,7 +633,7 @@ export default function Profile() {
 
             <div className="space-y-3">
               {loading ? (
-                <div className="text-zinc-400 py-10 text-center">Loading activity...</div>
+                <div className="text-zinc-400 py-10 text-center">{t('profile.loadingActivity')}</div>
               ) : shownActivities.length > 0 ? (
                 shownActivities.map((activity, index) => (
                   <div
@@ -619,26 +649,26 @@ export default function Profile() {
                         </div>
                         <div>
                           <div className="font-semibold group-hover:text-cyan-100 transition-colors">{activity.title}</div>
-                          <div className="text-xs text-zinc-500">{new Date(activity.timestamp).toLocaleString()} • {formatRelativeTime(activity.timestamp)}</div>
+                          <div className="text-xs text-zinc-500">{new Date(activity.timestamp).toLocaleString()} • {formatRelativeTimeLocalized(activity.timestamp)}</div>
                         </div>
                       </div>
 
                       {activity.kind === 'match' ? (
                         <span className={`px-2.5 py-1 text-xs rounded-full border uppercase ${resultBadgeClass(activity.result)}`}>
-                          {activity.result || 'completed'}
+                          {activity.result || t('profile.completed')}
                         </span>
                       ) : (
                         <span className="px-2.5 py-1 text-xs rounded-full border border-cyan-400/40 bg-cyan-500/15 text-cyan-200 uppercase">
-                          Embed
+                          {t('profile.embed')}
                         </span>
                       )}
                     </div>
 
                     {activity.kind === 'match' ? (
                       <div className="grid grid-cols-3 gap-2 text-sm">
-                        <MiniStat label="Score" value={activity.score} valueClass="text-emerald-200" />
-                        <MiniStat label="Duration" value={formatDuration(activity.durationSeconds)} />
-                        <MiniStat label="Type" value={activity.activityType} />
+                        <MiniStat label={t('profile.score')} value={activity.score} valueClass="text-emerald-200" />
+                        <MiniStat label={t('profile.duration')} value={formatDuration(activity.durationSeconds)} />
+                        <MiniStat label={t('profile.type')} value={activity.activityType} />
                       </div>
                     ) : (
                       <div className="text-sm text-zinc-200">{formatTelemetryEvent(activity.eventName)}</div>
@@ -650,14 +680,14 @@ export default function Profile() {
                           to={getGameLink(activity.gameId)}
                           className="inline-flex items-center gap-1 text-xs text-cyan-300 hover:text-cyan-100 transition-colors"
                         >
-                          View game →
+                          {t('profile.viewGame')}
                         </Link>
                       </div>
                     )}
                   </div>
                 ))
               ) : (
-                <div className="text-zinc-400 text-center py-10">No activities yet. Start your next run!</div>
+                <div className="text-zinc-400 text-center py-10">{t('profile.noActivities')}</div>
               )}
             </div>
 
@@ -667,7 +697,7 @@ export default function Profile() {
                   onClick={() => setVisibleActivities((prev) => prev + 8)}
                   className="px-5 py-2 rounded-lg border border-fuchsia-400/40 hover:border-cyan-300/60 text-zinc-100 hover:text-cyan-100 transition-colors"
                 >
-                  Load more
+                  {t('profile.loadMore')}
                 </button>
               </div>
             )}
@@ -675,35 +705,35 @@ export default function Profile() {
 
           <div className="space-y-6">
             <div className="rounded-3xl border border-emerald-400/25 bg-[linear-gradient(150deg,rgba(10,27,28,0.82),rgba(10,16,31,0.92))] backdrop-blur-sm p-5 shadow-[0_0_35px_rgba(16,185,129,0.14)] animate-fade-up" style={{ '--delay': '180ms' }}>
-              <h3 className="font-black mb-4 tracking-wide text-emerald-100">PERFORMANCE OVERVIEW</h3>
+              <h3 className="font-black mb-4 tracking-wide text-emerald-100">{t('profile.performanceOverview')}</h3>
               <div className="space-y-4 text-sm">
                 <ProgressRow
-                  label="Daily Activity"
+                  label={t('profile.dailyActivity')}
                   value={Math.min(todayMatches * 20, 100)}
-                  suffix={`${todayMatches} sessions today`}
+                  suffix={t('profile.sessionsToday', { count: todayMatches })}
                   tone="bg-gradient-to-r from-cyan-400 to-blue-400"
                   showPercent={false}
                 />
                 <div className="grid grid-cols-2 gap-3 pt-1">
-                  <MiniStat label="Play Time" value={formatDuration(summary.totalPlayTimeSeconds)} valueClass="text-cyan-200" />
-                  <MiniStat label="Games Played" value={summary.gamesPlayed} valueClass="text-violet-200" />
+                  <MiniStat label={t('profile.playTime')} value={formatDuration(summary.totalPlayTimeSeconds)} valueClass="text-cyan-200" />
+                  <MiniStat label={t('profile.gamesPlayed')} value={summary.gamesPlayed} valueClass="text-violet-200" />
                 </div>
               </div>
             </div>
 
             <div className="rounded-3xl border border-amber-400/25 bg-[linear-gradient(150deg,rgba(38,24,10,0.86),rgba(18,16,34,0.92))] backdrop-blur-sm p-5 shadow-[0_0_35px_rgba(245,158,11,0.14)] animate-fade-up" style={{ '--delay': '205ms' }}>
-              <h3 className="font-black mb-3 tracking-wide text-amber-100">YOUR REVIEWS</h3>
+              <h3 className="font-black mb-3 tracking-wide text-amber-100">{t('profile.yourReviews')}</h3>
 
               <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
-                <MiniStat label="Total" value={displayedReviewsSummary.totalReviews} valueClass="text-amber-100" />
-                <MiniStat label="Avg" value={displayedReviewsSummary.averageRating > 0 ? `${displayedReviewsSummary.averageRating} ★` : '—'} valueClass="text-amber-200" />
+                <MiniStat label={t('profile.total')} value={displayedReviewsSummary.totalReviews} valueClass="text-amber-100" />
+                <MiniStat label={t('profile.avg')} value={displayedReviewsSummary.averageRating > 0 ? `${displayedReviewsSummary.averageRating} ★` : '—'} valueClass="text-amber-200" />
               </div>
 
               <div className="space-y-2 mb-3">
                 <input
                   value={reviewSearch}
                   onChange={(e) => setReviewSearch(e.target.value)}
-                  placeholder="Search game/comment..."
+                  placeholder={t('profile.searchGameComment')}
                   className="w-full rounded-lg border border-amber-500/25 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
                 />
                 <div className="flex items-center gap-2">
@@ -712,10 +742,10 @@ export default function Profile() {
                     onChange={(e) => setReviewSort(REVIEW_SORT_OPTIONS.includes(e.target.value) ? e.target.value : 'newest')}
                     className="flex-1 rounded-lg border border-amber-500/25 bg-zinc-900/70 px-2.5 py-2 text-xs text-zinc-100"
                   >
-                    <option value="newest">Newest</option>
-                    <option value="oldest">Oldest</option>
-                    <option value="highest">Highest rating</option>
-                    <option value="lowest">Lowest rating</option>
+                    <option value="newest">{t('profile.newest')}</option>
+                    <option value="oldest">{t('profile.oldest')}</option>
+                    <option value="highest">{t('profile.highestRating')}</option>
+                    <option value="lowest">{t('profile.lowestRating')}</option>
                   </select>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -732,7 +762,7 @@ export default function Profile() {
                             : 'bg-zinc-900/60 border-zinc-700 text-zinc-300 hover:border-amber-400/40'
                         }`}
                       >
-                        {stars === 'all' ? 'All' : `${stars}★`}
+                        {stars === 'all' ? t('profile.all') : `${stars}★`}
                       </button>
                     );
                   })}
@@ -749,8 +779,8 @@ export default function Profile() {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="font-semibold text-sm text-zinc-100 truncate">{review?.game?.title || 'Unknown game'}</div>
-                          <div className="text-[11px] text-zinc-500">{formatRelativeTime(review.updatedAt || review.createdAt)}</div>
+                          <div className="font-semibold text-sm text-zinc-100 truncate">{review?.game?.title || t('profile.unknownGame')}</div>
+                          <div className="text-[11px] text-zinc-500">{formatRelativeTimeLocalized(review.updatedAt || review.createdAt)}</div>
                         </div>
                         <div className="text-xs font-bold text-amber-300 shrink-0">{Number(review.rating) || 0}★</div>
                       </div>
@@ -760,7 +790,7 @@ export default function Profile() {
                     </Link>
                   ))
                 ) : (
-                  <div className="text-zinc-400 text-sm">No reviews matched your filters.</div>
+                  <div className="text-zinc-400 text-sm">{t('profile.noGameData')}</div>
                 )}
               </div>
 
@@ -770,14 +800,14 @@ export default function Profile() {
                     onClick={() => setVisibleReviews((prev) => prev + 6)}
                     className="px-4 py-1.5 rounded-lg border border-amber-400/35 text-xs font-bold text-amber-100 hover:bg-amber-500/10 transition-colors"
                   >
-                    Load more reviews
+                    {t('profile.loadMoreReviews')}
                   </button>
                 </div>
               )}
             </div>
 
             <div className="rounded-3xl border border-violet-400/25 bg-[linear-gradient(150deg,rgba(27,12,45,0.88),rgba(12,13,34,0.92))] backdrop-blur-sm p-5 shadow-[0_0_35px_rgba(168,85,247,0.15)] animate-fade-up" style={{ '--delay': '230ms' }}>
-              <h3 className="font-black mb-4 tracking-wide text-violet-100">TOP PLAYED GAMES</h3>
+              <h3 className="font-black mb-4 tracking-wide text-violet-100">{t('profile.topPlayedGames')}</h3>
               <div className="space-y-3">
                 {summary.topGames?.length > 0 ? (
                   summary.topGames.map((game, index) => {
@@ -793,21 +823,21 @@ export default function Profile() {
                             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-violet-500/20 text-violet-200 text-xs border border-violet-400/40">
                               {index + 1}
                             </span>
-                            <span>{gameMeta?.title || normalizeGameName(game.gameId)}</span>
+                            <span>{gameMeta?.title || normalizeGameNameLocalized(game.gameId)}</span>
                           </div>
-                          <div className="text-xs text-zinc-300">{game.plays} plays</div>
+                          <div className="text-xs text-zinc-300">{game.plays} {t('gameCard.plays')}</div>
                         </div>
                       </Link>
                     );
                   })
                 ) : (
-                  <div className="text-zinc-400 text-sm">No game data yet.</div>
+                  <div className="text-zinc-400 text-sm">{t('profile.noGameData')}</div>
                 )}
               </div>
             </div>
 
             <div className="rounded-3xl border border-pink-400/25 bg-[linear-gradient(150deg,rgba(42,11,33,0.85),rgba(16,13,32,0.92))] backdrop-blur-sm p-5 shadow-[0_0_35px_rgba(236,72,153,0.15)] animate-fade-up" style={{ '--delay': '280ms' }}>
-              <h3 className="font-black mb-4 tracking-wide text-pink-100">FAVORITE GAMES</h3>
+              <h3 className="font-black mb-4 tracking-wide text-pink-100">{t('profile.favoriteGames')}</h3>
               <div className="space-y-3">
                 {favorites.length > 0 ? (
                   favorites.map((gameId, index) => {
@@ -828,15 +858,15 @@ export default function Profile() {
                             )}
                           </div>
                           <div className="flex-1">
-                            <div className="font-medium group-hover:text-pink-100 transition-colors">{gameMeta?.title || normalizeGameName(gameId)}</div>
-                            <div className="text-xs text-zinc-400">View details</div>
+                            <div className="font-medium group-hover:text-pink-100 transition-colors">{gameMeta?.title || normalizeGameNameLocalized(gameId)}</div>
+                            <div className="text-xs text-zinc-400">{t('profile.viewDetails')}</div>
                           </div>
                         </div>
                       </Link>
                     );
                   })
                 ) : (
-                  <div className="text-zinc-400 text-sm">No favorites yet. Add some from Home page.</div>
+                  <div className="text-zinc-400 text-sm">{t('profile.noFavorites')}</div>
                 )}
               </div>
             </div>
@@ -942,21 +972,6 @@ function calculateLongestActivityStreak(history) {
   return longest;
 }
 
-function getRankTitle(level) {
-  if (level >= 26) return 'MYTHIC OVERLORD';
-  if (level >= 20) return 'DIAMOND COMMANDER';
-  if (level >= 14) return 'PLATINUM STRIKER';
-  if (level >= 9) return 'GOLD HUNTER';
-  if (level >= 5) return 'SILVER RAIDER';
-  return 'ROOKIE';
-}
-
-function normalizeGameName(value) {
-  if (!value) return 'Unknown game';
-  if (/^[a-f0-9]{24}$/i.test(value)) return `Game #${value.slice(-6)}`;
-  return value.replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
 function formatDuration(seconds) {
   const safeSeconds = Number(seconds) || 0;
   if (safeSeconds <= 0) return '0m';
@@ -964,30 +979,6 @@ function formatDuration(seconds) {
   const m = Math.floor((safeSeconds % 3600) / 60);
   if (h > 0) return `${h}h ${m}m`;
   return `${Math.max(m, 1)}m`;
-}
-
-function formatRelativeTime(value) {
-  if (!value) return 'just now';
-  const timestamp = new Date(value).getTime();
-  if (Number.isNaN(timestamp)) return 'just now';
-  const diffMs = Date.now() - timestamp;
-  const diffMinutes = Math.floor(diffMs / 60000);
-  if (diffMinutes < 1) return 'just now';
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays}d ago`;
-  return new Date(value).toLocaleDateString();
-}
-
-function filterLabel(filterKey) {
-  if (filterKey === 'all') return 'All';
-  if (filterKey === 'matches' || filterKey === 'sessions') return 'Sessions';
-  if (filterKey === 'wins') return 'Wins';
-  if (filterKey === 'losses') return 'Losses';
-  if (filterKey === 'embed') return 'Embed';
-  return filterKey;
 }
 
 function resultBadgeClass(result) {

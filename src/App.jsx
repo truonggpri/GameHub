@@ -2,7 +2,6 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { CustomGamesProvider } from './context/CustomGamesContext';
 import Home from './pages/Home';
-import ComingSoon from './components/ComingSoon';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Profile from './pages/Profile';
@@ -11,6 +10,9 @@ import EmbeddedGame from './pages/EmbeddedGame';
 import AdminPanel from './pages/AdminPanel';
 import GameDetail from './pages/GameDetail';
 import Membership from './pages/Membership';
+import PaymentSuccess from './pages/PaymentSuccess';
+import PaymentCancel from './pages/PaymentCancel';
+import Support from './pages/Support';
 import SupportChatbot from './components/SupportChatbot';
 
 function App() {
@@ -25,12 +27,13 @@ function App() {
             <Route path="/signup" element={<Signup />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/membership" element={<Membership />} />
+            <Route path="/payment/success" element={<PaymentSuccess />} />
+            <Route path="/payment/cancel" element={<PaymentCancel />} />
+            <Route path="/support" element={<Support />} />
             <Route path="/admin" element={<AdminPanel />} />
             <Route path="/add-game" element={<AddGame />} />
             <Route path="/games/play/:id" element={<EmbeddedGame />} />
             <Route path="/games/:id" element={<GameDetail />} />
-            <Route path="/games/*" element={<ComingSoon />} />
-            <Route path="*" element={<ComingSoon />} />
           </Routes>
         </Router>
       </CustomGamesProvider>

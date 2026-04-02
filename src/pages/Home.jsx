@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
@@ -64,6 +64,16 @@ const resolveGameTags = (game = {}) => {
   return Array.from(new Set(fallbackTags)).slice(0, 12);
 };
 
+const normalizeNumericValue = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const normalizeTimestamp = (value) => {
+  const time = new Date(value || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+};
+
 export default function Home() {
   const { t } = useTranslation();
   const { user, toggleFavorite } = useAuth();
@@ -79,18 +89,20 @@ export default function Home() {
   }, [searchParams]);
   const tagMatchMode = selectedTags.length > 1 && searchParams.get('match') === 'any' ? 'any' : 'all';
 
-  const allGames = customGames
-    .filter((game) => {
-      const hasPlayableUrl = typeof (game.url || game.embedUrl) === 'string' && (game.url || game.embedUrl).trim() !== '';
-      return hasPlayableUrl || Boolean(game?.vipOnly);
-    })
-    .map((game) => ({
-      ...game,
-      tags: resolveGameTags(game),
-      id: game._id || game.id,
-      path: `/games/${game._id || game.id}`,
-      image: game.imageUrl || game.image,
-    }));
+  const allGames = useMemo(() => (
+    customGames
+      .filter((game) => {
+        const hasPlayableUrl = typeof (game.url || game.embedUrl) === 'string' && (game.url || game.embedUrl).trim() !== '';
+        return hasPlayableUrl || Boolean(game?.vipOnly);
+      })
+      .map((game) => ({
+        ...game,
+        tags: resolveGameTags(game),
+        id: game._id || game.id,
+        path: `/games/${game._id || game.id}`,
+        image: game.imageUrl || game.image,
+      }))
+  ), [customGames]);
 
   const filteredGames = useMemo(() => {
     const normalizedQuery = searchQuery.toLowerCase();
@@ -121,6 +133,49 @@ export default function Home() {
     const selectedSet = new Set(selectedTags);
     return [...selectedTags, ...advancedSearchTags.filter((tag) => !selectedSet.has(tag))];
   }, [advancedSearchTags, selectedTags]);
+
+  const heroPopularGames = useMemo(() => {
+    return [...allGames]
+      .sort((a, b) => {
+        const playDiff = normalizeNumericValue(b.playCount) - normalizeNumericValue(a.playCount);
+        if (playDiff !== 0) return playDiff;
+        const likeDiff = normalizeNumericValue(b.likeCount) - normalizeNumericValue(a.likeCount);
+        if (likeDiff !== 0) return likeDiff;
+        return normalizeNumericValue(b.rating) - normalizeNumericValue(a.rating);
+      })
+      .slice(0, 3);
+  }, [allGames]);
+
+  const heroNewGames = useMemo(() => {
+    const popularIds = new Set(heroPopularGames.map((game) => game.id));
+    const sortedByDate = [...allGames].sort((a, b) => normalizeTimestamp(b.createdAt) - normalizeTimestamp(a.createdAt));
+    const uniqueFresh = sortedByDate.filter((game) => !popularIds.has(game.id));
+    return (uniqueFresh.length > 0 ? uniqueFresh : sortedByDate).slice(0, 3);
+  }, [allGames, heroPopularGames]);
+
+  const heroShowcaseGames = useMemo(() => {
+    const merged = [...heroPopularGames, ...heroNewGames];
+    const seen = new Set();
+    return merged.filter((game) => {
+      if (seen.has(game.id)) return false;
+      seen.add(game.id);
+      return true;
+    }).slice(0, 3);
+  }, [heroPopularGames, heroNewGames]);
+
+  const heroStats = useMemo(() => {
+    const totalPlays = allGames.reduce((sum, game) => sum + normalizeNumericValue(game.playCount), 0);
+    const totalLikes = allGames.reduce((sum, game) => sum + normalizeNumericValue(game.likeCount), 0);
+    const newCount = heroNewGames.length;
+    return {
+      totalGames: allGames.length,
+      totalPlays,
+      totalLikes,
+      newCount
+    };
+  }, [allGames, heroNewGames]);
+
+  const heroPopularIdSet = useMemo(() => new Set(heroPopularGames.map((game) => game.id)), [heroPopularGames]);
 
   const filterSummary = useMemo(() => {
     const parts = [];
@@ -235,7 +290,51 @@ export default function Home() {
 
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [scrollY, setScrollY] = useState(0);
+  const [showcaseOrder, setShowcaseOrder] = useState([]);
+  const [hoveredShowcaseId, setHoveredShowcaseId] = useState(null);
   const heroRef = useRef(null);
+
+  useEffect(() => {
+    const ids = heroShowcaseGames.map((game) => game.id);
+    setShowcaseOrder((prev) => {
+      const existing = prev.filter((id) => ids.includes(id));
+      const missing = ids.filter((id) => !existing.includes(id));
+      const nextOrder = [...existing, ...missing];
+      if (prev.length === nextOrder.length && prev.every((id, index) => id === nextOrder[index])) {
+        return prev;
+      }
+      return nextOrder;
+    });
+  }, [heroShowcaseGames]);
+
+  useEffect(() => {
+    if (!hoveredShowcaseId) return;
+    const exists = heroShowcaseGames.some((game) => game.id === hoveredShowcaseId);
+    if (!exists) {
+      setHoveredShowcaseId(null);
+    }
+  }, [heroShowcaseGames, hoveredShowcaseId]);
+
+  const orderedShowcaseGames = useMemo(() => {
+    const gameMap = new Map(heroShowcaseGames.map((game) => [game.id, game]));
+    const validOrder = showcaseOrder.filter((id) => gameMap.has(id));
+    const missing = heroShowcaseGames.map((game) => game.id).filter((id) => !validOrder.includes(id));
+    return [...validOrder, ...missing]
+      .map((id) => gameMap.get(id))
+      .filter(Boolean);
+  }, [heroShowcaseGames, showcaseOrder]);
+
+  const showcasedDetailGame = orderedShowcaseGames.find((game) => game.id === hoveredShowcaseId) || null;
+  const maxShowcasePlays = orderedShowcaseGames.reduce((max, game) => Math.max(max, normalizeNumericValue(game.playCount)), 0);
+  const maxShowcaseLikes = orderedShowcaseGames.reduce((max, game) => Math.max(max, normalizeNumericValue(game.likeCount)), 0);
+  const detailPlayCount = normalizeNumericValue(showcasedDetailGame?.playCount);
+  const detailLikeCount = normalizeNumericValue(showcasedDetailGame?.likeCount);
+  const detailPlayProgress = maxShowcasePlays > 0 ? Math.min(100, Math.round((detailPlayCount / maxShowcasePlays) * 100)) : 0;
+  const detailLikeProgress = maxShowcaseLikes > 0 ? Math.min(100, Math.round((detailLikeCount / maxShowcaseLikes) * 100)) : 0;
+
+  const bringShowcaseToFront = (gameId) => {
+    setShowcaseOrder((prev) => [gameId, ...prev.filter((id) => id !== gameId)]);
+  };
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -489,6 +588,213 @@ export default function Home() {
             <span className="text-xs uppercase tracking-widest">{t('home.hero.scrollToExplore')}</span>
             <div className="w-6 h-10 rounded-full border-2 border-zinc-700 flex justify-center pt-2">
               <div className="w-1.5 h-3 bg-zinc-500 rounded-full animate-bounce-3d" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 px-6 pb-8 -mt-8 container mx-auto">
+        <div className="relative overflow-hidden rounded-[36px] border border-white/12 bg-gradient-to-br from-[#5f7de8]/88 via-[#715fc9]/86 to-[#8452b8]/88 p-6 sm:p-8 lg:p-10 shadow-[0_30px_80px_rgba(31,19,76,0.48)] animate-fade-up" style={{ '--delay': '170ms' }}>
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.14),transparent_45%),radial-gradient(circle_at_85%_80%,rgba(6,182,212,0.12),transparent_35%)]" />
+          <div className="pointer-events-none absolute right-[-120px] top-1/2 h-[320px] w-[320px] -translate-y-1/2 rounded-full border border-black/15 bg-black/10" />
+
+          <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-8 lg:gap-10 items-center">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.24em] font-black text-cyan-100/90 mb-3">{t('home.showcase.featuredHub')}</p>
+              <h3 className="text-3xl sm:text-4xl xl:text-5xl font-black leading-tight text-white drop-shadow-[0_5px_24px_rgba(0,0,0,0.25)]">
+                {t('home.showcase.popularNewTitle')}
+              </h3>
+              <p className="mt-4 max-w-xl text-sm sm:text-base text-indigo-100/90 leading-relaxed">
+                {t('home.showcase.description')}
+              </p>
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={scrollToGamesSection}
+                  className="px-6 py-3 rounded-full bg-white text-indigo-700 font-black text-sm tracking-wide hover:bg-cyan-50 transition-colors"
+                >
+                  {t('home.showcase.exploreGames')}
+                </button>
+                {heroPopularGames[0] && (
+                  <Link
+                    to={heroPopularGames[0].path}
+                    className="px-6 py-3 rounded-full border border-white/45 bg-white/10 text-white font-black text-sm tracking-wide hover:bg-white/20 transition-colors"
+                  >
+                    {t('home.showcase.playHotGame')}
+                  </Link>
+                )}
+              </div>
+
+              <div className="mt-7 grid grid-cols-2 sm:grid-cols-4 gap-2.5 rounded-2xl border border-white/20 bg-black/15 backdrop-blur-sm p-2.5">
+                {[
+                  { label: 'Games', value: heroStats.totalGames },
+                  { label: 'Popular', value: heroPopularGames.length },
+                  { label: 'Plays', value: heroStats.totalPlays },
+                  { label: 'New', value: heroStats.newCount }
+                ].map((item) => (
+                  <div key={item.label} className="rounded-xl bg-white/10 px-3 py-2.5 text-center border border-white/15">
+                    <p className="text-lg sm:text-xl font-black text-white leading-none">{item.value}</p>
+                    <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-indigo-100/85 font-bold">{item.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="relative min-h-[360px] sm:min-h-[400px] lg:min-h-[420px]" onMouseLeave={() => setHoveredShowcaseId(null)}>
+              {orderedShowcaseGames.map((game, idx) => {
+                const imageUrl = typeof game.image === 'string' ? game.image.trim() : '';
+                const playCount = normalizeNumericValue(game.playCount);
+                const likeCount = normalizeNumericValue(game.likeCount);
+                const topOffset = 20 + (idx * 42);
+                const leftOffset = 8 + (idx * 54);
+                const depth = 68 - (idx * 16);
+                const rotate = -14 + (idx * 9);
+                const isFront = idx === 0;
+                const isHoveredCard = hoveredShowcaseId === game.id;
+                const floatOffset = Math.sin(scrollY / 120 + idx * 1.3) * (6 - idx * 1.1);
+                const sideOffset = Math.cos(scrollY / 180 + idx * 0.9) * (3 - idx * 0.4);
+                const hoverLift = isHoveredCard ? -14 : 0;
+                const stackScale = isFront ? 1 : 0.93 - (idx * 0.01);
+                return (
+                  <button
+                    key={`showcase-${game.id}`}
+                    type="button"
+                    onClick={() => bringShowcaseToFront(game.id)}
+                    onMouseEnter={() => setHoveredShowcaseId(game.id)}
+                    className="absolute block w-[68%] sm:w-[62%] max-w-[320px] group text-left"
+                    style={{
+                      top: `${topOffset}px`,
+                      left: `${leftOffset}px`,
+                      transform: `translate3d(${mousePos.x * (14 - idx * 2.3) + sideOffset}px, ${mousePos.y * (8.5 - idx * 1.6) + floatOffset + hoverLift}px, ${depth + (isHoveredCard ? 12 : 0)}px) rotate(${rotate + (isHoveredCard ? 1.4 : 0)}deg) rotateX(${mousePos.y * (-3.2 + idx * 0.15)}deg) rotateY(${mousePos.x * (5.8 - idx * 0.2)}deg) scale(${stackScale + (isHoveredCard ? 0.035 : 0)})`,
+                      transformStyle: 'preserve-3d',
+                      transition: 'transform 620ms cubic-bezier(0.22, 1, 0.36, 1), filter 450ms ease, z-index 0ms linear 120ms',
+                      filter: isHoveredCard ? 'brightness(1.07)' : 'brightness(1)',
+                      zIndex: 30 - idx
+                    }}
+                  >
+                    <article className={`rounded-2xl border backdrop-blur-sm overflow-hidden transition-all duration-500 ${isFront ? 'border-cyan-200/35 bg-[#10162f]/90 shadow-[0_25px_55px_rgba(8,145,178,0.28)]' : 'border-white/18 bg-[#111129]/82 shadow-[0_16px_30px_rgba(0,0,0,0.35)] group-hover:shadow-[0_25px_55px_rgba(20,184,166,0.24)] group-hover:border-cyan-200/28'} ${isHoveredCard ? 'shadow-[0_32px_70px_rgba(34,211,238,0.26)]' : ''}`}>
+                      <div className="relative h-36 sm:h-40 bg-zinc-900">
+                        {imageUrl ? (
+                          <img src={imageUrl} alt={game.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-zinc-700 via-zinc-900 to-black" />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
+                        <div className="absolute top-2 left-2 px-2 py-1 rounded-md bg-black/55 border border-white/20 text-[10px] text-cyan-200 font-bold uppercase tracking-[0.12em]">
+                          {heroPopularIdSet.has(game.id) ? t('home.showcase.popularPick') : t('home.showcase.freshDrop')}
+                        </div>
+                        {!isFront && (
+                          <div className="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/55 border border-white/20 text-[9px] text-white/90 font-bold uppercase tracking-[0.12em]">
+                            {t('home.showcase.clickToFront')}
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-3.5">
+                        <h4 className="text-sm font-black text-white truncate">{game.title}</h4>
+                        <div className="mt-2 flex items-center gap-2 text-[10px] text-zinc-300 flex-wrap">
+                          <span className="px-1.5 py-0.5 rounded border border-cyan-400/40 bg-cyan-400/10">▶ {playCount}</span>
+                          <span className="px-1.5 py-0.5 rounded border border-rose-400/40 bg-rose-400/10">❤ {likeCount}</span>
+                          {game.category && <span className="text-zinc-400">{game.category}</span>}
+                        </div>
+                      </div>
+                    </article>
+                  </button>
+                );
+              })}
+
+              <div
+                className={`absolute right-0 bottom-0 w-full sm:w-[84%] rounded-2xl border backdrop-blur-xl p-4 transition-all duration-500 ${showcasedDetailGame ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto border-cyan-300/35 bg-[#0b1230]/88 shadow-[0_22px_55px_rgba(9,16,41,0.68)]' : 'opacity-0 translate-y-6 scale-[0.98] pointer-events-none border-transparent bg-transparent'}`}
+                style={{ zIndex: 60 }}
+              >
+                {showcasedDetailGame && (
+                  <>
+                    <div className="absolute inset-0 rounded-2xl pointer-events-none bg-[linear-gradient(120deg,rgba(56,189,248,0.12),transparent_36%,rgba(232,121,249,0.11))]" />
+                    <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/65 to-transparent" />
+                    <div className="relative z-10 flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex items-start gap-3">
+                        <div className="w-14 h-14 rounded-xl border border-white/15 overflow-hidden bg-zinc-900 shrink-0">
+                          {typeof showcasedDetailGame.image === 'string' && showcasedDetailGame.image.trim() ? (
+                            <img src={showcasedDetailGame.image} alt={showcasedDetailGame.title} className="w-full h-full object-cover" loading="lazy" />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-zinc-700 via-zinc-900 to-black" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-cyan-200/90 font-bold flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-pulse" />
+                            {t('home.showcase.hoverPreview')}
+                          </p>
+                          <h4 className="text-base sm:text-lg font-black text-white truncate">{showcasedDetailGame.title}</h4>
+                          <p className="mt-1 text-[11px] text-zinc-400">{heroPopularIdSet.has(showcasedDetailGame.id) ? t('home.showcase.popularPicks') : t('home.showcase.newlyAdded')}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => bringShowcaseToFront(showcasedDetailGame.id)}
+                        className="shrink-0 px-3 py-1.5 rounded-lg border border-cyan-300/35 bg-cyan-400/10 text-cyan-100 text-[10px] font-black uppercase tracking-[0.14em] hover:bg-cyan-400/20 transition-colors"
+                      >
+                        {t('home.showcase.bringFront')}
+                      </button>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-zinc-200">
+                      <span className="px-2 py-1 rounded-md border border-cyan-400/35 bg-cyan-400/10">▶ {normalizeNumericValue(showcasedDetailGame.playCount)} plays</span>
+                      <span className="px-2 py-1 rounded-md border border-rose-400/35 bg-rose-400/10">❤ {normalizeNumericValue(showcasedDetailGame.likeCount)} likes</span>
+                      {showcasedDetailGame.category && (
+                        <span className="px-2 py-1 rounded-md border border-white/20 bg-white/5 text-zinc-300">{showcasedDetailGame.category}</span>
+                      )}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div className="rounded-xl border border-white/12 bg-white/[0.04] p-2.5">
+                        <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-cyan-200/90 font-bold">
+                          <span>{t('home.showcase.playHeat')}</span>
+                          <span>{detailPlayProgress}%</span>
+                        </div>
+                        <div className="mt-2 h-1.5 rounded-full bg-cyan-400/15 overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-sky-300 transition-all duration-500" style={{ width: `${detailPlayProgress}%` }} />
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-white/12 bg-white/[0.04] p-2.5">
+                        <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-rose-200/90 font-bold">
+                          <span>{t('home.showcase.likePulse')}</span>
+                          <span>{detailLikeProgress}%</span>
+                        </div>
+                        <div className="mt-2 h-1.5 rounded-full bg-rose-400/15 overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-rose-400 to-pink-300 transition-all duration-500" style={{ width: `${detailLikeProgress}%` }} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="relative z-10 mt-3 text-xs text-zinc-300/85 line-clamp-2 leading-relaxed">
+                      {showcasedDetailGame.description || t('home.showcase.cardHint')}
+                    </p>
+
+                    <div className="relative z-10 mt-4 flex items-center gap-2">
+                      <Link
+                        to={showcasedDetailGame.path}
+                        className="px-4 py-2 rounded-lg bg-cyan-300 text-zinc-900 text-xs font-black uppercase tracking-[0.12em] hover:bg-cyan-200 transition-colors"
+                      >
+                        {t('home.showcase.viewDetails')}
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={scrollToGamesSection}
+                        className="px-4 py-2 rounded-lg border border-white/20 bg-white/5 text-zinc-100 text-xs font-black uppercase tracking-[0.12em] hover:bg-white/10 transition-colors"
+                      >
+                        {t('home.showcase.viewAll')}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {orderedShowcaseGames.length === 0 && (
+                <div className="absolute inset-0 rounded-2xl border border-dashed border-white/30 bg-black/20 grid place-items-center text-sm text-indigo-100/90">
+                  {t('home.showcase.noData')}
+                </div>
+              )}
             </div>
           </div>
         </div>

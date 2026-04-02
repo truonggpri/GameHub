@@ -35,7 +35,7 @@ export default function Navbar() {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        const res = await axios.get('http://localhost:5000/api/support/tickets', {
+        const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/support/tickets`, {
           params: { status: 'open' },
           headers: { Authorization: `Bearer ${token}` }
         });

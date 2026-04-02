@@ -91,7 +91,7 @@ export default function AdminPanel() {
   const isAdmin = useMemo(() => user?.role === 'admin', [user]);
 
   const api = useMemo(() => {
-    const instance = axios.create({ baseURL: 'http://localhost:5000/api' });
+    const instance = axios.create({ baseURL: (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace(/\/$/, '') });
     instance.interceptors.request.use((config) => {
       const token = localStorage.getItem('token');
       if (token) config.headers.Authorization = `Bearer ${token}`;

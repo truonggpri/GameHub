@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import axios from 'axios';
+import API_BASE_URL from '../config/api';
 
 const ISSUE_INTENT_PATTERN = /(lỗi|bug|error|crash|freeze|lag|vip|không hoạt động|khong hoat dong|không vào được|khong vao duoc|không dùng được|khong dung duoc)/i;
 
@@ -40,7 +41,7 @@ export default function SupportChatbot() {
 
         try {
           const reportRes = await axios.post(
-            'http://localhost:5000/api/ai/report-issue',
+            `${API_BASE_URL}/ai/report-issue`,
             {
               message: content,
               gameId: currentGameId || undefined,

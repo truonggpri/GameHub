@@ -6,7 +6,7 @@ import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import { useCustomGames } from '../context/CustomGamesContext';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace(/\/$/, '');
 const TELEMETRY_STORAGE_KEY = 'gamehub.embed.telemetry';
 
 const createTelemetrySignature = (event = {}) => {

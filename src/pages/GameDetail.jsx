@@ -161,8 +161,8 @@ export default function GameDetail() {
       const res = await axios.get(`${API_BASE_URL}/games/${id}`, getAuthConfig({ params: { reviewLimit: COMMENTS_PAGE_SIZE, reviewSort: commentsSort } }));
       const payload = res.data;
       setGameDetail(payload);
-      if (Array.isArray(payload.comments)) setComments(payload.comments);
-      if (payload.commentsPagination) setCommentsPagination(normalizePagination(payload.commentsPagination));
+      if (Array.isArray(payload.reviews)) setReviews(payload.reviews);
+      if (payload.reviewsPagination) setReviewsPagination(normalizePagination(payload.reviewsPagination));
       setReviewSummary({
         averageRating: Number(payload.reviewSummary?.averageRating) || 0,
         totalRatings: Number(payload.reviewSummary?.totalRatings) || 0,
@@ -336,7 +336,7 @@ export default function GameDetail() {
       const isUpdating = Boolean(myReview);
       await axios.post(`${API_BASE_URL}/games/${id}/reviews`, { rating: draftRating, comment: draftComment.trim() }, getAuthConfig());
       setSuccessMessage(isUpdating ? t('gameDetail.review.updated') : t('gameDetail.review.submitted'));
-      await Promise.all([loadGameDetail({ silent: true }), loadComments({ page: 1, sort: commentsSort })]);
+      await Promise.all([loadGameDetail({ silent: true }), loadReviews({ page: 1, sort: reviewsSort })]);
     } catch (err) {
       setError(err?.response?.data?.message || t('gameDetail.review.submitFailed'));
     } finally {
@@ -358,7 +358,7 @@ export default function GameDetail() {
       setDraftRating(0);
       setDraftComment('');
       setSuccessMessage(t('gameDetail.review.deleted'));
-      await Promise.all([loadGameDetail({ silent: true }), loadComments({ page: 1, sort: commentsSort })]);
+      await Promise.all([loadGameDetail({ silent: true }), loadReviews({ page: 1, sort: reviewsSort })]);
     } catch (err) {
       setError(err?.response?.data?.message || t('gameDetail.review.deleteFailed'));
     } finally {

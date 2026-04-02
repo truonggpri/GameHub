@@ -626,9 +626,9 @@ router.get('/:id', async (req, res) => {
     res.json({
       ...toGameResponse(game, { viewer }),
       reviewSummary,
-      comments: reviewList.comments,
-      commentsPagination: reviewList.pagination,
-      commentsSort: reviewList.sort,
+      reviews: reviewList.comments,
+      reviewsPagination: reviewList.pagination,
+      reviewsSort: reviewList.sort,
       myReview
     });
   } catch (err) {

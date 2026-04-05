@@ -22,6 +22,7 @@ server/.env
 server/.env.local
 server/.env.production
 
+
 # Server uploads (user content)
 server/uploads/avatars/*
 !server/uploads/avatars/.gitkeep

@@ -71,7 +71,3 @@ GOOGLE_CLIENT_ID=your_google_client_id
 RESEND_API_KEY=your_resend_key
 RESEND_FROM_EMAIL=your_sender_email
 ```
-
-## Deployment
-
-See `DEPLOY.md` for detailed deployment instructions.

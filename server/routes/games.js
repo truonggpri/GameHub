@@ -363,7 +363,8 @@ router.get('/exclusive', async (req, res) => {
   try {
     const viewer = await getAuthorizedUser(req);
     const exclusiveQuery = {
-      ...activeGameQuery,
+      deletedAt: null,
+      isCustom: true,
       $or: [
         { path: '/pokemon' },
         { path: '/snake' },

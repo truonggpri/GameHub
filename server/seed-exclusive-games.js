@@ -1,10 +1,17 @@
 const mongoose = require('mongoose');
 const Game = require('./models/Game');
-require('dotenv').config();
+require('dotenv').config({ path: './.env' });
 
 const seedExclusiveGames = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/gamehub');
+    const uri = process.env.MONGODB_URI;
+    if (!uri) {
+      console.error('ERROR: MONGODB_URI is not defined in .env file');
+      console.error('Please add MONGODB_URI=mongodb+srv://... to your .env file');
+      process.exit(1);
+    }
+    console.log('Connecting to MongoDB...');
+    await mongoose.connect(uri);
     console.log('Connected to MongoDB');
 
     const games = [

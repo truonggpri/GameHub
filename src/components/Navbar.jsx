@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 
@@ -10,8 +10,11 @@ export default function Navbar() {
   const { t, i18n } = useTranslation();
   const isActive = (path) => location.pathname === path;
   const [scrolled, setScrolled] = useState(false);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [openSupportCount, setOpenSupportCount] = useState(0);
+  const navbarRef = useRef(null);
+  const mouseRafRef = useRef(null);
+  const targetRotateRef = useRef({ x: 0, y: 0 });
+  const currentRotateRef = useRef({ x: 0, y: 0 });
 
   const toggleLanguage = () => {
     const nextLang = i18n.language === 'en' ? 'vi' : 'en';
@@ -51,18 +54,80 @@ export default function Navbar() {
     return () => window.clearInterval(timer);
   }, [user?.role]);
 
-  const handleMouseMove = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left - rect.width / 2) / 25;
-    const y = (e.clientY - rect.top - rect.height / 2) / 25;
-    setMousePos({ x, y });
+  const animateTilt = () => {
+    const node = navbarRef.current;
+    if (!node) {
+      mouseRafRef.current = null;
+      return;
+    }
+
+    const target = targetRotateRef.current;
+    const current = currentRotateRef.current;
+
+    current.x += (target.x - current.x) * 0.18;
+    current.y += (target.y - current.y) * 0.18;
+
+    if (Math.abs(target.x - current.x) < 0.01) current.x = target.x;
+    if (Math.abs(target.y - current.y) < 0.01) current.y = target.y;
+
+    node.style.setProperty('--nav-rotate-x', `${current.x.toFixed(2)}deg`);
+    node.style.setProperty('--nav-rotate-y', `${current.y.toFixed(2)}deg`);
+
+    const stillMoving = Math.abs(target.x - current.x) > 0.01 || Math.abs(target.y - current.y) > 0.01;
+    if (stillMoving) {
+      mouseRafRef.current = requestAnimationFrame(animateTilt);
+      return;
+    }
+
+    mouseRafRef.current = null;
   };
 
-  const handleMouseLeave = () => setMousePos({ x: 0, y: 0 });
+  const startTiltAnimation = () => {
+    if (mouseRafRef.current === null) {
+      mouseRafRef.current = requestAnimationFrame(animateTilt);
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    const node = navbarRef.current;
+    if (!node) return;
+
+    const rect = node.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const normalizedX = (e.clientX - rect.left) / rect.width;
+    const normalizedY = (e.clientY - rect.top) / rect.height;
+
+    const centeredX = normalizedX * 2 - 1;
+    const centeredY = normalizedY * 2 - 1;
+    const easedX = Math.sign(centeredX) * Math.pow(Math.abs(centeredX), 1.25);
+    const easedY = Math.sign(centeredY) * Math.pow(Math.abs(centeredY), 1.25);
+
+    targetRotateRef.current = {
+      x: Math.max(-4, Math.min(4, -easedY * 4)),
+      y: Math.max(-6, Math.min(6, easedX * 6)),
+    };
+
+    startTiltAnimation();
+  };
+
+  const handleMouseLeave = () => {
+    targetRotateRef.current = { x: 0, y: 0 };
+    startTiltAnimation();
+  };
+
+  useEffect(() => {
+    return () => {
+      if (mouseRafRef.current) {
+        cancelAnimationFrame(mouseRafRef.current);
+      }
+    };
+  }, []);
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center p-6 pointer-events-none animate-nav-drop perspective-1000">
       <div 
+        ref={navbarRef}
         className={`
           pointer-events-auto backdrop-blur-md border rounded-full px-6 py-3 
           flex items-center gap-8 shadow-2xl transition-all duration-500 preserve-3d
@@ -71,8 +136,9 @@ export default function Navbar() {
             : 'bg-zinc-900/80 border-white/10 animate-glow-pulse'}
         `}
         style={{
-          transform: `perspective(1000px) rotateX(${-mousePos.y}deg) rotateY(${mousePos.x}deg) translateZ(10px)`,
-          transition: 'transform 0.15s ease-out',
+          transform: 'perspective(1000px) rotateX(var(--nav-rotate-x, 0deg)) rotateY(var(--nav-rotate-y, 0deg)) translateZ(10px)',
+          transition: 'transform 0.06s linear',
+          willChange: 'transform',
         }}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}

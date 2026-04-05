@@ -18,6 +18,43 @@ const SUPPORTED_MIME_EXT = {
   'image/gif': 'gif'
 };
 
+const sendPasswordResetCode = async ({ email, code, username }) => {
+  const resendApiKey = (process.env.RESEND_API_KEY || '').trim();
+  const sender = (process.env.RESEND_FROM_EMAIL || '').trim();
+  if (!resendApiKey || !sender) {
+    throw new Error('Email service is not configured (missing RESEND_API_KEY or RESEND_FROM_EMAIL)');
+  }
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111;max-width:520px">
+      <h2 style="margin-bottom:8px">Xac thuc quen mat khau</h2>
+      <p>Xin chao ${username || 'ban'},</p>
+      <p>Your Google password reset code is:</p>
+      <div style="font-size:28px;font-weight:700;letter-spacing:4px;margin:16px 0">${code}</div>
+      <p>This code will expire in 10 minutes. Please do not share this code with anyone.</p>
+    </div>
+  `;
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: sender,
+      to: [email],
+      subject: 'GameHub - Google password reset code',
+      html
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Failed to send password reset email: ${text}`);
+  }
+};
+
 const slugifyUsernameBase = (value) => {
   const normalized = String(value || '')
     .toLowerCase()
@@ -65,6 +102,18 @@ const verifyGoogleIdToken = async (idToken) => {
     picture: typeof payload.picture === 'string' ? payload.picture.trim() : ''
   };
 };
+
+const findUserByIdentifier = async (identifierValue) => {
+  const identifier = typeof identifierValue === 'string' ? identifierValue.trim() : '';
+  if (!identifier) return null;
+  const normalizedEmail = identifier.toLowerCase();
+  return User.findOne({
+    $and: [
+      { deletedAt: null },
+      { $or: [{ username: identifier }, { email: normalizedEmail }] }
+    ]
+  });
+};
 const VIP_PLAN_CONFIG = {
   vip_monthly: { id: 'vip_monthly', title: 'VIP Monthly', days: 30, price: 5, currency: 'USD' },
   vip_quarterly: { id: 'vip_quarterly', title: 'VIP Quarterly', days: 90, price: 10, currency: 'USD' },
@@ -74,7 +123,12 @@ const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
 const GOOGLE_FIRST_LOGIN_OTP_TTL_MS = Number(process.env.GOOGLE_FIRST_LOGIN_OTP_TTL_MS || 10 * 60 * 1000);
 const GOOGLE_FIRST_LOGIN_OTP_MAX_ATTEMPTS = Number(process.env.GOOGLE_FIRST_LOGIN_OTP_MAX_ATTEMPTS || 5);
 const GOOGLE_FIRST_LOGIN_RESEND_COOLDOWN_MS = Number(process.env.GOOGLE_FIRST_LOGIN_RESEND_COOLDOWN_MS || 30 * 1000);
+const GOOGLE_PASSWORD_RESET_OTP_TTL_MS = Number(process.env.GOOGLE_PASSWORD_RESET_OTP_TTL_MS || 10 * 60 * 1000);
+const GOOGLE_PASSWORD_RESET_OTP_MAX_ATTEMPTS = Number(process.env.GOOGLE_PASSWORD_RESET_OTP_MAX_ATTEMPTS || 5);
+const GOOGLE_PASSWORD_RESET_RESEND_COOLDOWN_MS = Number(process.env.GOOGLE_PASSWORD_RESET_RESEND_COOLDOWN_MS || 30 * 1000);
+const GOOGLE_PASSWORD_RESET_VERIFIED_TTL_MS = Number(process.env.GOOGLE_PASSWORD_RESET_VERIFIED_TTL_MS || 10 * 60 * 1000);
 const pendingGoogleFirstLoginVerifications = new Map();
+const pendingGooglePasswordResets = new Map();
 
 const maskEmail = (email = '') => {
   const [local, domain] = String(email).split('@');
@@ -92,6 +146,15 @@ const cleanupExpiredGoogleVerifications = () => {
   }
 };
 
+const cleanupExpiredGooglePasswordResets = () => {
+  const now = Date.now();
+  for (const [key, value] of pendingGooglePasswordResets.entries()) {
+    if (!value?.expiresAt || value.expiresAt <= now) {
+      pendingGooglePasswordResets.delete(key);
+    }
+  }
+};
+
 const generateOtpCode = () => String(crypto.randomInt(100000, 1000000));
 
 const sendEmailVerificationCode = async ({ email, code, username }) => {
@@ -105,9 +168,9 @@ const sendEmailVerificationCode = async ({ email, code, username }) => {
     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111;max-width:520px">
       <h2 style="margin-bottom:8px">Xac thuc dang nhap Google</h2>
       <p>Xin chao ${username || 'ban'},</p>
-      <p>Ma xac thuc dang nhap GameHub cua ban la:</p>
+      <p>Your Google login verification code is:</p>
       <div style="font-size:28px;font-weight:700;letter-spacing:4px;margin:16px 0">${code}</div>
-      <p>Ma co hieu luc trong 10 phut. Vui long khong chia se ma nay.</p>
+      <p>This code will expire in 10 minutes. Please do not share this code with anyone.</p>
     </div>
   `;
 
@@ -120,7 +183,7 @@ const sendEmailVerificationCode = async ({ email, code, username }) => {
     body: JSON.stringify({
       from: sender,
       to: [email],
-      subject: 'GameHub - Ma xac thuc dang nhap Google',
+      subject: 'GameHub - Google login verification code',
       html
     })
   });
@@ -738,6 +801,216 @@ router.post('/login', async (req, res) => {
     res.json({ token, user: toUserResponse(user) });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.post('/forgot-password/start', async (req, res) => {
+  try {
+    cleanupExpiredGooglePasswordResets();
+    const identifier = typeof req.body.identifier === 'string' ? req.body.identifier.trim() : '';
+    if (!identifier) {
+      return res.status(400).json({ message: 'Username or email is required' });
+    }
+
+    const user = await findUserByIdentifier(identifier);
+    if (!user) {
+      return res.status(404).json({ message: 'Account not found' });
+    }
+
+    const isGoogleUser = user.authProvider === 'google' || Boolean(user.googleId);
+    if (!isGoogleUser) {
+      return res.json({
+        requiresVerification: false,
+        provider: 'local',
+        message: 'You can set a new password now.'
+      });
+    }
+
+    if (!user.email) {
+      return res.status(400).json({ message: 'Google account does not have a valid email for OTP verification' });
+    }
+
+    const code = generateOtpCode();
+    const resetToken = crypto.randomBytes(24).toString('hex');
+    pendingGooglePasswordResets.set(resetToken, {
+      userId: String(user._id),
+      email: user.email,
+      username: user.username,
+      code,
+      attempts: 0,
+      verified: false,
+      lastSentAt: Date.now(),
+      expiresAt: Date.now() + GOOGLE_PASSWORD_RESET_OTP_TTL_MS
+    });
+
+    await sendPasswordResetCode({
+      email: user.email,
+      code,
+      username: user.username
+    });
+
+    return res.status(202).json({
+      requiresVerification: true,
+      provider: 'google',
+      resetToken,
+      email: maskEmail(user.email),
+      message: 'Verification code sent to your email. Please verify OTP before resetting password.'
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Unable to start password reset' });
+  }
+});
+
+router.post('/forgot-password/reset-local', async (req, res) => {
+  try {
+    const identifier = typeof req.body.identifier === 'string' ? req.body.identifier.trim() : '';
+    const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : '';
+
+    if (!identifier || !newPassword) {
+      return res.status(400).json({ message: 'Username/email and new password are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    const user = await findUserByIdentifier(identifier);
+    if (!user) {
+      return res.status(404).json({ message: 'Account not found' });
+    }
+
+    const isGoogleUser = user.authProvider === 'google' || Boolean(user.googleId);
+    if (isGoogleUser) {
+      return res.status(400).json({ message: 'Google account requires OTP verification before resetting password' });
+    }
+
+    user.password = newPassword;
+    await user.save();
+    return res.json({ message: 'Password has been reset successfully' });
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Unable to reset password' });
+  }
+});
+
+router.post('/forgot-password/google/verify-code', async (req, res) => {
+  try {
+    cleanupExpiredGooglePasswordResets();
+    const resetToken = typeof req.body.resetToken === 'string' ? req.body.resetToken.trim() : '';
+    const code = typeof req.body.code === 'string' ? req.body.code.trim() : '';
+
+    if (!resetToken || !code) {
+      return res.status(400).json({ message: 'Reset token and OTP code are required' });
+    }
+
+    const pending = pendingGooglePasswordResets.get(resetToken);
+    if (!pending || pending.expiresAt <= Date.now()) {
+      pendingGooglePasswordResets.delete(resetToken);
+      return res.status(400).json({ message: 'OTP expired. Please start forgot password again.' });
+    }
+
+    pending.attempts = Number(pending.attempts || 0) + 1;
+    if (pending.attempts > GOOGLE_PASSWORD_RESET_OTP_MAX_ATTEMPTS) {
+      pendingGooglePasswordResets.delete(resetToken);
+      return res.status(400).json({ message: 'Too many incorrect attempts. Please start forgot password again.' });
+    }
+
+    if (pending.code !== code) {
+      pendingGooglePasswordResets.set(resetToken, pending);
+      return res.status(400).json({ message: 'Invalid OTP code' });
+    }
+
+    pending.verified = true;
+    pending.code = '';
+    pending.expiresAt = Date.now() + GOOGLE_PASSWORD_RESET_VERIFIED_TTL_MS;
+    pendingGooglePasswordResets.set(resetToken, pending);
+
+    return res.json({ message: 'OTP verified. You can now enter a new password.' });
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Unable to verify OTP code' });
+  }
+});
+
+router.post('/forgot-password/google/resend-code', async (req, res) => {
+  try {
+    cleanupExpiredGooglePasswordResets();
+    const resetToken = typeof req.body.resetToken === 'string' ? req.body.resetToken.trim() : '';
+    if (!resetToken) {
+      return res.status(400).json({ message: 'Reset token is required' });
+    }
+
+    const pending = pendingGooglePasswordResets.get(resetToken);
+    if (!pending || pending.expiresAt <= Date.now()) {
+      pendingGooglePasswordResets.delete(resetToken);
+      return res.status(400).json({ message: 'OTP expired. Please start forgot password again.' });
+    }
+
+    const now = Date.now();
+    const elapsed = now - Number(pending.lastSentAt || 0);
+    if (elapsed < GOOGLE_PASSWORD_RESET_RESEND_COOLDOWN_MS) {
+      const retryAfterSeconds = Math.ceil((GOOGLE_PASSWORD_RESET_RESEND_COOLDOWN_MS - elapsed) / 1000);
+      return res.status(429).json({
+        message: `Please wait ${retryAfterSeconds}s before requesting another code.`,
+        retryAfterSeconds
+      });
+    }
+
+    const code = generateOtpCode();
+    pending.code = code;
+    pending.attempts = 0;
+    pending.verified = false;
+    pending.lastSentAt = now;
+    pending.expiresAt = now + GOOGLE_PASSWORD_RESET_OTP_TTL_MS;
+    pendingGooglePasswordResets.set(resetToken, pending);
+
+    await sendPasswordResetCode({
+      email: pending.email,
+      code,
+      username: pending.username
+    });
+
+    return res.json({
+      message: 'A new OTP code has been sent to your email.',
+      email: maskEmail(pending.email)
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Unable to resend OTP code' });
+  }
+});
+
+router.post('/forgot-password/google/reset', async (req, res) => {
+  try {
+    cleanupExpiredGooglePasswordResets();
+    const resetToken = typeof req.body.resetToken === 'string' ? req.body.resetToken.trim() : '';
+    const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : '';
+
+    if (!resetToken || !newPassword) {
+      return res.status(400).json({ message: 'Reset token and new password are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    const pending = pendingGooglePasswordResets.get(resetToken);
+    if (!pending || pending.expiresAt <= Date.now()) {
+      pendingGooglePasswordResets.delete(resetToken);
+      return res.status(400).json({ message: 'Reset session expired. Please start forgot password again.' });
+    }
+    if (!pending.verified) {
+      return res.status(400).json({ message: 'OTP verification is required before resetting password' });
+    }
+
+    const user = await User.findOne({ _id: pending.userId, deletedAt: null });
+    if (!user) {
+      pendingGooglePasswordResets.delete(resetToken);
+      return res.status(404).json({ message: 'Account not found' });
+    }
+
+    user.password = newPassword;
+    await user.save();
+    pendingGooglePasswordResets.delete(resetToken);
+
+    return res.json({ message: 'Password has been reset successfully' });
+  } catch (error) {
+    res.status(400).json({ message: error.message || 'Unable to reset password' });
   }
 });
 

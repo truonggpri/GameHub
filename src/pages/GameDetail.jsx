@@ -77,6 +77,51 @@ const resolveGameTags = (game) => {
   return unique.slice(0, 8);
 };
 
+const parsePositiveMinutes = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.min(Math.round(parsed), 240);
+};
+
+const extractMinutesFromText = (value) => {
+  if (typeof value !== 'string') return null;
+  const matches = value.match(/\d+/g);
+  if (!matches || matches.length === 0) return null;
+  const numbers = matches.map((item) => Number(item)).filter(Number.isFinite);
+  if (numbers.length === 0) return null;
+  if (numbers.length >= 2) return Math.round((numbers[0] + numbers[1]) / 2);
+  return numbers[0];
+};
+
+const resolveEstimatedMinutes = (game = {}) => {
+  const directMinutes = parsePositiveMinutes(
+    game?.estimatedMinutes
+      ?? game?.estimatedTimeMinutes
+      ?? game?.durationMinutes
+      ?? game?.avgSessionMinutes
+  );
+  if (directMinutes) return directMinutes;
+
+  const textMinutes = extractMinutesFromText(game?.estimatedTime || game?.duration || '');
+  if (textMinutes) return parsePositiveMinutes(textMinutes) || textMinutes;
+
+  const difficulty = typeof game?.difficulty === 'string' ? game.difficulty : '';
+  if (difficulty === 'Easy') return 5;
+  if (difficulty === 'Medium') return 10;
+  if (difficulty === 'Hard') return 15;
+  if (difficulty === 'Expert') return 20;
+  return 10;
+};
+
+const formatEstimatedMinutes = (minutes) => {
+  if (!minutes || !Number.isFinite(minutes)) return '';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remain = minutes % 60;
+  if (!remain) return `${hours}h`;
+  return `${hours}h ${remain}m`;
+};
+
 export default function GameDetail() {
   const { t } = useTranslation();
   const { id } = useParams();
@@ -110,6 +155,7 @@ export default function GameDetail() {
   const [reviewsSort, setReviewsSort] = useState('newest');
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewsError, setReviewsError] = useState('');
+  const [userSummary, setUserSummary] = useState(null);
 
   const game = gameDetail || customGames.find((item) => (item._id || item.id) === id);
   const gameId = game?._id || game?.id || id;
@@ -138,11 +184,14 @@ export default function GameDetail() {
   const controls = game?.controls || '';
   const version = game?.version || '';
   const addedDate = formatDate(game?.createdAt);
+  const estimatedMinutes = resolveEstimatedMinutes(game);
+  const estimatedTimeLabel = formatEstimatedMinutes(estimatedMinutes);
 
   const infoItems = [];
   if (publisher)  infoItems.push({ icon: '🏢', label: t('gameDetail.infoLabels.publisher'), value: publisher });
   if (players)    infoItems.push({ icon: '👥', label: t('gameDetail.infoLabels.players'), value: players });
   if (controls)   infoItems.push({ icon: '🎮', label: t('gameDetail.infoLabels.controls'), value: controls });
+  if (estimatedTimeLabel) infoItems.push({ icon: '⏱️', label: t('gameDetail.infoLabels.estimatedTime', { defaultValue: 'Estimated Time' }), value: estimatedTimeLabel });
   if (version)    infoItems.push({ icon: '📦', label: t('gameDetail.infoLabels.version'), value: version });
   if (category)   infoItems.push({ icon: '📂', label: t('gameDetail.infoLabels.category'), value: category });
   if (difficulty)  infoItems.push({ icon: diffStyle?.icon || '⚡', label: t('gameDetail.infoLabels.difficulty'), value: difficulty });
@@ -152,6 +201,20 @@ export default function GameDetail() {
     const token = localStorage.getItem('token');
     if (!token) return config;
     return { ...config, headers: { ...(config.headers || {}), Authorization: `Bearer ${token}` } };
+  };
+
+  const loadUserSummary = async () => {
+    if (!user) {
+      setUserSummary(null);
+      return;
+    }
+
+    try {
+      const res = await axios.get(`${API_BASE_URL}/scores/user/summary`, getAuthConfig());
+      setUserSummary(res.data || null);
+    } catch {
+      setUserSummary(null);
+    }
   };
 
   const loadGameDetail = async ({ silent = false } = {}) => {
@@ -202,6 +265,76 @@ export default function GameDetail() {
   useEffect(() => { loadGameDetail(); }, [id, user?._id, user?.id]);
   useEffect(() => { loadComments({ page: 1, sort: commentsSort }); }, [id, commentsSort]);
   useEffect(() => { loadReviews({ page: 1, sort: reviewsSort }); }, [id, reviewsSort]);
+  useEffect(() => { loadUserSummary(); }, [user?._id, user?.id]);
+
+  const userTopGameIds = useMemo(() => new Set((userSummary?.topGames || []).map((item) => String(item?.gameId || ''))), [userSummary]);
+  const userFavorites = useMemo(() => new Set(Array.isArray(user?.favorites) ? user.favorites.map((item) => String(item)) : []), [user]);
+
+  const relatedGames = useMemo(() => {
+    if (!Array.isArray(customGames) || customGames.length === 0) return [];
+    const currentId = String(gameId || '');
+    const currentTags = new Set(resolveGameTags(game));
+    const currentCategory = normalizeTagValue(game?.category || '');
+    const currentDifficulty = normalizeTagValue(game?.difficulty || '');
+
+    const scored = customGames
+      .filter((item) => String(item?._id || item?.id || '') !== currentId)
+      .map((item) => {
+        const candidateId = String(item?._id || item?.id || '');
+        const candidateTags = resolveGameTags(item);
+        const overlapCount = candidateTags.reduce((sum, tag) => sum + (currentTags.has(tag) ? 1 : 0), 0);
+        const sameCategory = normalizeTagValue(item?.category || '') === currentCategory ? 1 : 0;
+        const sameDifficulty = normalizeTagValue(item?.difficulty || '') === currentDifficulty ? 1 : 0;
+        const historyBoost = userTopGameIds.has(candidateId) ? 1 : 0;
+        const favoriteBoost = userFavorites.has(candidateId) ? 1 : 0;
+        const popularityBoost = (Number(item?.playCount || 0) * 0.005) + (Number(item?.likeCount || 0) * 0.01);
+        const score = (overlapCount * 2.2) + (sameCategory * 2) + (sameDifficulty * 0.8) + (historyBoost * 2.8) + (favoriteBoost * 1.8) + popularityBoost;
+
+        const reasons = [];
+        if (sameCategory) reasons.push(t('gameDetail.recommendation.sameCategory', { defaultValue: 'Same category' }));
+        if (overlapCount > 0) reasons.push(t('gameDetail.recommendation.tagOverlap', { count: overlapCount, defaultValue: '{{count}} matching tags' }));
+        if (historyBoost) reasons.push(t('gameDetail.recommendation.historyBoost', { defaultValue: 'Based on your play history' }));
+        if (favoriteBoost) reasons.push(t('gameDetail.recommendation.favoriteBoost', { defaultValue: 'In your favorites' }));
+
+        return {
+          id: candidateId,
+          title: item?.title || '',
+          image: item?.imageUrl || item?.image || '',
+          category: item?.category || '',
+          difficulty: item?.difficulty || '',
+          playCount: Number(item?.playCount || 0),
+          likeCount: Number(item?.likeCount || 0),
+          path: `/games/${candidateId}`,
+          reasons: reasons.slice(0, 2),
+          score
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    return scored.slice(0, 4);
+  }, [customGames, game, gameId, t, userFavorites, userTopGameIds]);
+
+  const whyRecommended = useMemo(() => {
+    const reasons = [];
+    const currentId = String(gameId || '');
+    if (userFavorites.has(currentId)) {
+      reasons.push(t('gameDetail.recommendation.favoriteBoost', { defaultValue: 'This game is in your favorites' }));
+    }
+
+    if (userSummary?.topGames?.length) {
+      reasons.push(t('gameDetail.recommendation.historyBased', { defaultValue: 'Matched with your recent play history' }));
+    }
+
+    if (gameTags.length > 0) {
+      reasons.push(t('gameDetail.recommendation.tagSignal', { defaultValue: 'Strong tag signals based on this title' }));
+    }
+
+    if (category) {
+      reasons.push(t('gameDetail.recommendation.categorySignal', { category, defaultValue: 'Popular in {{category}} category' }));
+    }
+
+    return reasons.slice(0, 3);
+  }, [category, gameId, gameTags.length, t, userFavorites, userSummary?.topGames?.length]);
 
   useEffect(() => {
     if (successMessage) {
@@ -562,6 +695,23 @@ export default function GameDetail() {
                   ))}
                 </div>
               )}
+
+              {whyRecommended.length > 0 && (
+                <div className="mt-6 rounded-xl border border-cyan-400/20 bg-cyan-500/5 p-4">
+                  <h3 className="text-sm font-bold mb-2 flex items-center gap-2">
+                    <span className="text-cyan-300">✨</span>
+                    {t('gameDetail.recommendation.title', { defaultValue: 'Why recommended for you' })}
+                  </h3>
+                  <ul className="space-y-1.5 text-sm text-zinc-300">
+                    {whyRecommended.map((reason, index) => (
+                      <li key={`why-recommended-${index}`} className="flex items-start gap-2">
+                        <span className="mt-1 w-1.5 h-1.5 rounded-full bg-cyan-300/80" />
+                        <span>{reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
             {/* Write a Review */}
@@ -878,12 +1028,53 @@ export default function GameDetail() {
                       <span className="font-semibold text-zinc-200">{controls}</span>
                     </div>
                   )}
+                  {estimatedTimeLabel && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-zinc-500">{t('gameDetail.sidebar.estimatedTime', { defaultValue: 'Estimated Time' })}</span>
+                      <span className="font-semibold text-zinc-200">{estimatedTimeLabel}</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-zinc-500">{t('gameDetail.sidebar.status')}</span>
                     <span className={`font-bold ${canPlay ? 'text-emerald-400' : 'text-zinc-500'}`}>
                       {canPlay ? t('gameDetail.sidebar.online') : t('gameDetail.sidebar.offline')}
                     </span>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {relatedGames.length > 0 && (
+              <div className="rounded-2xl border border-white/8 bg-zinc-900/60 backdrop-blur-sm p-5 animate-fade-up" style={{ '--delay': '240ms' }}>
+                <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
+                  <span className="text-cyan-400">🧠</span>
+                  {t('gameDetail.recommendation.relatedTitle', { defaultValue: 'Related games for you' })}
+                </h3>
+                <div className="space-y-2.5">
+                  {relatedGames.map((item) => (
+                    <Link
+                      key={`related-${item.id}`}
+                      to={item.path}
+                      className="block rounded-xl border border-white/10 bg-white/[0.03] p-3 hover:bg-white/[0.06] hover:border-cyan-300/30 transition-colors"
+                    >
+                      <div className="flex gap-3">
+                        <div className="w-14 h-14 rounded-lg overflow-hidden border border-white/10 bg-zinc-900 shrink-0">
+                          {item.image ? (
+                            <img src={item.image} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-zinc-700 via-zinc-900 to-black" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-zinc-100 truncate">{item.title}</p>
+                          <p className="text-[11px] text-zinc-500 mt-0.5">{item.category || 'Game'}{item.difficulty ? ` • ${item.difficulty}` : ''}</p>
+                          {item.reasons.length > 0 && (
+                            <p className="text-[11px] text-cyan-200/90 mt-1 line-clamp-2">{item.reasons.join(' • ')}</p>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
                 </div>
               </div>
             )}

@@ -85,6 +85,131 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const startForgotPassword = async (identifier) => {
+    try {
+      const identifierValue = typeof identifier === 'string' ? identifier.trim() : '';
+      if (!identifierValue) {
+        return { success: false, message: 'Username or email is required' };
+      }
+
+      const res = await api.post('/auth/forgot-password/start', { identifier: identifierValue });
+      return {
+        success: true,
+        requiresVerification: Boolean(res.data?.requiresVerification),
+        provider: res.data?.provider || 'local',
+        resetToken: res.data?.resetToken || '',
+        email: res.data?.email || '',
+        message: res.data?.message || ''
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Unable to start forgot password flow'
+      };
+    }
+  };
+
+  const resetForgotPasswordLocal = async (identifier, newPassword) => {
+    try {
+      const identifierValue = typeof identifier === 'string' ? identifier.trim() : '';
+      const passwordValue = typeof newPassword === 'string' ? newPassword : '';
+      if (!identifierValue || !passwordValue) {
+        return { success: false, message: 'Username/email and new password are required' };
+      }
+
+      const res = await api.post('/auth/forgot-password/reset-local', {
+        identifier: identifierValue,
+        newPassword: passwordValue
+      });
+
+      return {
+        success: true,
+        message: res.data?.message || 'Password has been reset successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Unable to reset password'
+      };
+    }
+  };
+
+  const verifyGoogleForgotPasswordCode = async (resetToken, code) => {
+    try {
+      const tokenValue = typeof resetToken === 'string' ? resetToken.trim() : '';
+      const codeValue = typeof code === 'string' ? code.trim() : '';
+      if (!tokenValue || !codeValue) {
+        return { success: false, message: 'Reset token and OTP code are required' };
+      }
+
+      const res = await api.post('/auth/forgot-password/google/verify-code', {
+        resetToken: tokenValue,
+        code: codeValue
+      });
+
+      return {
+        success: true,
+        message: res.data?.message || 'OTP verified'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Unable to verify OTP code'
+      };
+    }
+  };
+
+  const resendGoogleForgotPasswordCode = async (resetToken) => {
+    try {
+      const tokenValue = typeof resetToken === 'string' ? resetToken.trim() : '';
+      if (!tokenValue) {
+        return { success: false, message: 'Reset token is required' };
+      }
+
+      const res = await api.post('/auth/forgot-password/google/resend-code', {
+        resetToken: tokenValue
+      });
+
+      return {
+        success: true,
+        message: res.data?.message || 'A new OTP code has been sent',
+        email: res.data?.email || '',
+        retryAfterSeconds: 0
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Unable to resend OTP code',
+        retryAfterSeconds: Number(error.response?.data?.retryAfterSeconds || 0)
+      };
+    }
+  };
+
+  const resetForgotPasswordGoogle = async (resetToken, newPassword) => {
+    try {
+      const tokenValue = typeof resetToken === 'string' ? resetToken.trim() : '';
+      const passwordValue = typeof newPassword === 'string' ? newPassword : '';
+      if (!tokenValue || !passwordValue) {
+        return { success: false, message: 'Reset token and new password are required' };
+      }
+
+      const res = await api.post('/auth/forgot-password/google/reset', {
+        resetToken: tokenValue,
+        newPassword: passwordValue
+      });
+
+      return {
+        success: true,
+        message: res.data?.message || 'Password has been reset successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Unable to reset password'
+      };
+    }
+  };
+
   const resendGoogleFirstLoginCode = async (verificationToken) => {
     try {
       const tokenValue = typeof verificationToken === 'string' ? verificationToken.trim() : '';
@@ -460,7 +585,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, googleLogin, verifyGoogleFirstLogin, resendGoogleFirstLoginCode, logout, loading, toggleFavorite, addGameHistory, updateProfile, uploadAvatar, getVipPlans, purchaseVip, initiatePayment, verifyPayment, getPaymentHistory, getAdminPayments, getAdminPaymentStats, markPaymentNotified, createStripeCheckout, verifyStripePayment, getStripeSession }}>
+    <AuthContext.Provider value={{ user, login, signup, startForgotPassword, resetForgotPasswordLocal, verifyGoogleForgotPasswordCode, resendGoogleForgotPasswordCode, resetForgotPasswordGoogle, googleLogin, verifyGoogleFirstLogin, resendGoogleFirstLoginCode, logout, loading, toggleFavorite, addGameHistory, updateProfile, uploadAvatar, getVipPlans, purchaseVip, initiatePayment, verifyPayment, getPaymentHistory, getAdminPayments, getAdminPaymentStats, markPaymentNotified, createStripeCheckout, verifyStripePayment, getStripeSession }}>
       {children}
     </AuthContext.Provider>
   );

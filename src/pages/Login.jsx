@@ -7,12 +7,34 @@ export default function Login() {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotStep, setForgotStep] = useState('identify');
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
+  const [forgotResetToken, setForgotResetToken] = useState('');
+  const [forgotMaskedEmail, setForgotMaskedEmail] = useState('');
+  const [forgotOtpCode, setForgotOtpCode] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [forgotMessage, setForgotMessage] = useState('');
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
+  const [forgotResendingOtp, setForgotResendingOtp] = useState(false);
+  const [forgotResendCooldown, setForgotResendCooldown] = useState(0);
   const [googleVerificationToken, setGoogleVerificationToken] = useState('');
   const [googleVerificationCode, setGoogleVerificationCode] = useState('');
   const [googleVerificationEmail, setGoogleVerificationEmail] = useState('');
   const [resendingOtp, setResendingOtp] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
-  const { login, googleLogin, verifyGoogleFirstLogin, resendGoogleFirstLoginCode } = useAuth();
+  const {
+    login,
+    googleLogin,
+    verifyGoogleFirstLogin,
+    resendGoogleFirstLoginCode,
+    startForgotPassword,
+    resetForgotPasswordLocal,
+    verifyGoogleForgotPasswordCode,
+    resendGoogleForgotPasswordCode,
+    resetForgotPasswordGoogle
+  } = useAuth();
   const navigate = useNavigate();
   const googleButtonRef = useRef(null);
   const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
@@ -96,6 +118,15 @@ export default function Login() {
     return () => window.clearInterval(timer);
   }, [resendCooldown]);
 
+  useEffect(() => {
+    if (forgotResendCooldown <= 0) return undefined;
+    const timer = window.setInterval(() => {
+      setForgotResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [forgotResendCooldown]);
+
   const handleVerifyGoogleFirstLogin = async (e) => {
     e.preventDefault();
     setError('');
@@ -131,6 +162,117 @@ export default function Login() {
       setResendCooldown(result.retryAfterSeconds);
     }
     setError(result.message || 'Unable to resend verification code');
+  };
+
+  const resetForgotFlow = () => {
+    setForgotMode(false);
+    setForgotStep('identify');
+    setForgotIdentifier('');
+    setForgotResetToken('');
+    setForgotMaskedEmail('');
+    setForgotOtpCode('');
+    setForgotNewPassword('');
+    setForgotConfirmPassword('');
+    setForgotMessage('');
+    setForgotSubmitting(false);
+    setForgotResendingOtp(false);
+    setForgotResendCooldown(0);
+  };
+
+  const handleStartForgotPassword = async (e) => {
+    e.preventDefault();
+    setError('');
+    setForgotMessage('');
+    setForgotSubmitting(true);
+
+    const result = await startForgotPassword(forgotIdentifier);
+    setForgotSubmitting(false);
+
+    if (!result.success) {
+      setError(result.message || 'Unable to start forgot password flow');
+      return;
+    }
+
+    if (result.requiresVerification) {
+      setForgotStep('otp');
+      setForgotResetToken(result.resetToken || '');
+      setForgotMaskedEmail(result.email || '');
+      setForgotOtpCode('');
+      setForgotResendCooldown(30);
+      setForgotMessage(result.message || 'OTP code sent to your email');
+      return;
+    }
+
+    setForgotStep('resetLocal');
+    setForgotMessage(result.message || 'Enter your new password');
+  };
+
+  const handleVerifyForgotOtp = async (e) => {
+    e.preventDefault();
+    setError('');
+    setForgotMessage('');
+    setForgotSubmitting(true);
+
+    const result = await verifyGoogleForgotPasswordCode(forgotResetToken, forgotOtpCode);
+    setForgotSubmitting(false);
+
+    if (!result.success) {
+      setError(result.message || 'Unable to verify OTP code');
+      return;
+    }
+
+    setForgotStep('resetGoogle');
+    setForgotMessage(result.message || 'OTP verified. Please set your new password');
+  };
+
+  const handleResendForgotOtp = async () => {
+    if (!forgotResetToken || forgotResendingOtp || forgotResendCooldown > 0) return;
+    setError('');
+    setForgotResendingOtp(true);
+
+    const result = await resendGoogleForgotPasswordCode(forgotResetToken);
+    setForgotResendingOtp(false);
+
+    if (!result.success) {
+      if (result.retryAfterSeconds > 0) {
+        setForgotResendCooldown(result.retryAfterSeconds);
+      }
+      setError(result.message || 'Unable to resend OTP code');
+      return;
+    }
+
+    setForgotMaskedEmail(result.email || forgotMaskedEmail);
+    setForgotResendCooldown(30);
+    setForgotMessage(result.message || 'A new OTP code has been sent');
+  };
+
+  const handleSubmitNewForgotPassword = async (e) => {
+    e.preventDefault();
+    setError('');
+    setForgotMessage('');
+
+    if (!forgotNewPassword || forgotNewPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    setForgotSubmitting(true);
+    const result = forgotStep === 'resetGoogle'
+      ? await resetForgotPasswordGoogle(forgotResetToken, forgotNewPassword)
+      : await resetForgotPasswordLocal(forgotIdentifier, forgotNewPassword);
+    setForgotSubmitting(false);
+
+    if (!result.success) {
+      setError(result.message || 'Unable to reset password');
+      return;
+    }
+
+    setForgotStep('done');
+    setForgotMessage(result.message || 'Password reset successful. You can now log in.');
   };
 
   return (
@@ -182,6 +324,127 @@ export default function Login() {
                 {resendingOtp ? 'Sending...' : resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
               </button>
             </form>
+          ) : forgotMode ? (
+            <>
+              {forgotMessage && (
+                <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-lg mb-6 text-sm">
+                  {forgotMessage}
+                </div>
+              )}
+
+              {forgotStep === 'identify' && (
+                <form onSubmit={handleStartForgotPassword} className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-2">Username or Email</label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                      placeholder="Enter your username or email"
+                      value={forgotIdentifier}
+                      onChange={(e) => setForgotIdentifier(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={forgotSubmitting}
+                    className="w-full neo-brutalism bg-white text-black font-bold py-3 rounded-lg hover:bg-zinc-200 disabled:opacity-70 transition-colors"
+                  >
+                    {forgotSubmitting ? 'PROCESSING...' : 'CONTINUE'}
+                  </button>
+                </form>
+              )}
+
+              {forgotStep === 'otp' && (
+                <form onSubmit={handleVerifyForgotOtp} className="space-y-6">
+                  <div className="bg-amber-500/10 border border-amber-500/30 text-amber-200 px-4 py-3 rounded-lg text-sm">
+                    Enter OTP sent to {forgotMaskedEmail || 'your email'} to continue password reset.
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-2">OTP code</label>
+                    <input
+                      type="text"
+                      required
+                      inputMode="numeric"
+                      maxLength={6}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                      placeholder="Enter 6-digit OTP"
+                      value={forgotOtpCode}
+                      onChange={(e) => setForgotOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={forgotSubmitting}
+                    className="w-full neo-brutalism bg-white text-black font-bold py-3 rounded-lg hover:bg-zinc-200 disabled:opacity-70 transition-colors"
+                  >
+                    {forgotSubmitting ? 'VERIFYING...' : 'VERIFY OTP'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResendForgotOtp}
+                    disabled={forgotResendingOtp || forgotResendCooldown > 0}
+                    className="w-full border border-zinc-700 text-zinc-200 font-semibold py-3 rounded-lg hover:bg-zinc-800 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {forgotResendingOtp ? 'Sending...' : forgotResendCooldown > 0 ? `Resend code (${forgotResendCooldown}s)` : 'Resend code'}
+                  </button>
+                </form>
+              )}
+
+              {(forgotStep === 'resetLocal' || forgotStep === 'resetGoogle') && (
+                <form onSubmit={handleSubmitNewForgotPassword} className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-2">New Password</label>
+                    <input
+                      type="password"
+                      required
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                      placeholder="Enter new password"
+                      value={forgotNewPassword}
+                      onChange={(e) => setForgotNewPassword(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-400 mb-2">Confirm New Password</label>
+                    <input
+                      type="password"
+                      required
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                      placeholder="Re-enter new password"
+                      value={forgotConfirmPassword}
+                      onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={forgotSubmitting}
+                    className="w-full neo-brutalism bg-white text-black font-bold py-3 rounded-lg hover:bg-zinc-200 disabled:opacity-70 transition-colors"
+                  >
+                    {forgotSubmitting ? 'UPDATING...' : 'RESET PASSWORD'}
+                  </button>
+                </form>
+              )}
+
+              {forgotStep === 'done' && (
+                <button
+                  type="button"
+                  onClick={resetForgotFlow}
+                  className="w-full neo-brutalism bg-white text-black font-bold py-3 rounded-lg hover:bg-zinc-200 transition-colors"
+                >
+                  BACK TO LOGIN
+                </button>
+              )}
+
+              {forgotStep !== 'done' && (
+                <button
+                  type="button"
+                  onClick={resetForgotFlow}
+                  className="w-full mt-4 border border-zinc-700 text-zinc-200 font-semibold py-3 rounded-lg hover:bg-zinc-800 transition-colors"
+                >
+                  CANCEL
+                </button>
+              )}
+            </>
           ) : (
             <>
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -208,6 +471,20 @@ export default function Login() {
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotMode(true);
+                    setForgotStep('identify');
+                    setForgotIdentifier(identifier);
+                    setError('');
+                    setForgotMessage('');
+                  }}
+                  className="text-sm text-purple-400 hover:text-purple-300 font-medium"
+                >
+                  Forgot password?
+                </button>
 
                 <button
                   type="submit"

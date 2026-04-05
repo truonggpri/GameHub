@@ -405,6 +405,9 @@ router.post('/chat', async (req, res) => {
   try {
     const message = typeof req.body.message === 'string' ? req.body.message.trim() : '';
     const gameId = typeof req.body.gameId === 'string' ? req.body.gameId.trim() : '';
+    const requestedLanguageRaw = typeof req.body.language === 'string' ? req.body.language.trim().toLowerCase() : '';
+    const requestedLanguage = requestedLanguageRaw.startsWith('vi') ? 'vi' : 'en';
+    const isVietnamese = requestedLanguage === 'vi';
     if (!message) return res.status(400).json({ message: 'message is required' });
     if (message.length > 1200) return res.status(400).json({ message: 'message is too long' });
 
@@ -444,20 +447,31 @@ router.post('/chat', async (req, res) => {
       if (matched.length === 0) {
         const picks = candidatePool.slice(0, 3).map((item) => `- ${item.title} (${item.category || 'Custom'})`).join('\n');
         if (userProfile) {
-          return `Mình đang ưu tiên theo hồ sơ chơi của bạn (favorites + lịch sử gần đây). Bạn có thể thử:\n${picks}\nBạn muốn mình lọc sâu hơn theo độ khó hoặc phong cách chơi không?`;
+          if (isVietnamese) {
+            return `Mình đang ưu tiên theo hồ sơ chơi của bạn (favorites + lịch sử gần đây). Bạn có thể thử:\n${picks}\nBạn muốn mình lọc sâu hơn theo độ khó hoặc phong cách chơi không?`;
+          }
+          return `I prioritized recommendations using your profile (favorites + recent play history). You can try:\n${picks}\nDo you want me to narrow this down by difficulty or play style?`;
         }
-        return `Mình gợi ý bạn thử các game đang được đánh giá tốt:\n${picks}\nBạn có thể nói rõ bạn thích thể loại hoặc độ khó nào để mình gợi ý sát hơn.`;
+        if (isVietnamese) {
+          return `Mình gợi ý bạn thử các game đang được đánh giá tốt:\n${picks}\nBạn có thể nói rõ bạn thích thể loại hoặc độ khó nào để mình gợi ý sát hơn.`;
+        }
+        return `Here are some highly rated games you can try:\n${picks}\nTell me your preferred genre or difficulty and I'll suggest more precisely.`;
       }
 
       const picks = matched.map((item) => `- ${item.title} (${item.category || 'Custom'} • ${item.difficulty || 'Medium'})`).join('\n');
-      return `Theo sở thích bạn vừa mô tả, bạn có thể chơi thử:\n${picks}\nNếu muốn mình sẽ lọc thêm theo nhịp chơi nhanh/chậm hoặc solo/multiplayer.`;
+      if (isVietnamese) {
+        return `Theo sở thích bạn vừa mô tả, bạn có thể chơi thử:\n${picks}\nNếu muốn mình sẽ lọc thêm theo nhịp chơi nhanh/chậm hoặc solo/multiplayer.`;
+      }
+      return `Based on your preference, you can try:\n${picks}\nIf you want, I can further filter by fast/slow pace or solo/multiplayer.`;
     };
 
     try {
       const aiContent = await fetchAiCompletion([
         {
           role: 'system',
-          content: 'Bạn là trợ lý GameHub. Trả lời ngắn gọn, thực tế, ưu tiên gợi ý game phù hợp, ngôn ngữ tiếng Việt thân thiện.'
+          content: isVietnamese
+            ? 'Bạn là trợ lý GameHub. Trả lời ngắn gọn, thực tế, ưu tiên gợi ý game phù hợp. Luôn trả lời bằng tiếng Việt tự nhiên.'
+            : 'You are the GameHub assistant. Reply concisely and practically, prioritizing suitable game recommendations. Always respond in natural English.'
         },
         {
           role: 'user',

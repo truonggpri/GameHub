@@ -74,12 +74,61 @@ const normalizeTimestamp = (value) => {
   return Number.isFinite(time) ? time : 0;
 };
 
+const FILTER_STORAGE_KEY = 'gamehub.home.filters.v1';
+const HOME_SORT_OPTIONS = ['trending', 'mostPlayed', 'new'];
+
+const normalizeSortValue = (value) => {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  return HOME_SORT_OPTIONS.includes(normalized) ? normalized : 'trending';
+};
+
+const parsePositiveMinutes = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.min(Math.round(parsed), 240);
+};
+
+const extractMinutesFromText = (value) => {
+  if (typeof value !== 'string') return null;
+  const matches = value.match(/\d+/g);
+  if (!matches || matches.length === 0) return null;
+  const numbers = matches.map((item) => Number(item)).filter(Number.isFinite);
+  if (numbers.length === 0) return null;
+  if (numbers.length >= 2) {
+    return Math.round((numbers[0] + numbers[1]) / 2);
+  }
+  return numbers[0];
+};
+
+const resolveEstimatedMinutes = (game = {}) => {
+  const directMinutes = parsePositiveMinutes(
+    game?.estimatedMinutes
+      ?? game?.estimatedTimeMinutes
+      ?? game?.durationMinutes
+      ?? game?.avgSessionMinutes
+  );
+  if (directMinutes) return directMinutes;
+
+  const textMinutes = extractMinutesFromText(game?.estimatedTime || game?.duration || '');
+  if (textMinutes) return parsePositiveMinutes(textMinutes) || textMinutes;
+
+  const difficulty = typeof game?.difficulty === 'string' ? game.difficulty : '';
+  if (difficulty === 'Easy') return 5;
+  if (difficulty === 'Medium') return 10;
+  if (difficulty === 'Hard') return 15;
+  if (difficulty === 'Expert') return 20;
+  return 10;
+};
+
 export default function Home() {
   const { t } = useTranslation();
   const { user, toggleFavorite } = useAuth();
   const { customGames, loading } = useCustomGames();
   const [searchParams, setSearchParams] = useSearchParams();
+  const hasRestoredFiltersRef = useRef(false);
   const searchQuery = normalizeSearchValue(searchParams.get('q') || '');
+  const sortBy = normalizeSortValue(searchParams.get('sort'));
+  const maxMinutes = parsePositiveMinutes(searchParams.get('maxMinutes'));
   const selectedTags = useMemo(() => {
     const explicitTags = parseTagsSearchParam(searchParams.get('tags'));
     if (explicitTags.length > 0) return explicitTags;
@@ -101,6 +150,7 @@ export default function Home() {
         id: game._id || game.id,
         path: `/games/${game._id || game.id}`,
         image: game.imageUrl || game.image,
+        estimatedMinutes: resolveEstimatedMinutes(game)
       }))
   ), [customGames]);
 
@@ -112,6 +162,7 @@ export default function Home() {
       const matchesTitle = !normalizedQuery || gameTitle.includes(normalizedQuery);
 
       if (!matchesTitle) return false;
+      if (maxMinutes && game.estimatedMinutes > maxMinutes) return false;
       if (selectedTags.length === 0) return true;
 
       if (tagMatchMode === 'any') {
@@ -120,7 +171,45 @@ export default function Home() {
 
       return selectedTags.every((tag) => game.tags.includes(tag));
     });
-  }, [allGames, searchQuery, selectedTags, tagMatchMode]);
+  }, [allGames, searchQuery, selectedTags, tagMatchMode, maxMinutes]);
+
+  const sortedFilteredGames = useMemo(() => {
+    const cloned = [...filteredGames];
+
+    if (sortBy === 'mostPlayed') {
+      return cloned.sort((a, b) => {
+        const playDiff = normalizeNumericValue(b.playCount) - normalizeNumericValue(a.playCount);
+        if (playDiff !== 0) return playDiff;
+        const likeDiff = normalizeNumericValue(b.likeCount) - normalizeNumericValue(a.likeCount);
+        if (likeDiff !== 0) return likeDiff;
+        return normalizeTimestamp(b.createdAt) - normalizeTimestamp(a.createdAt);
+      });
+    }
+
+    if (sortBy === 'new') {
+      return cloned.sort((a, b) => {
+        const dateDiff = normalizeTimestamp(b.createdAt) - normalizeTimestamp(a.createdAt);
+        if (dateDiff !== 0) return dateDiff;
+        return normalizeNumericValue(b.playCount) - normalizeNumericValue(a.playCount);
+      });
+    }
+
+    return cloned.sort((a, b) => {
+      const scoreA = (
+        normalizeNumericValue(a.playCount) * 0.55
+        + normalizeNumericValue(a.likeCount) * 1.25
+        + normalizeNumericValue(a.rating) * 12
+        + Math.max(0, 30 - Math.floor((Date.now() - normalizeTimestamp(a.createdAt)) / 86400000))
+      );
+      const scoreB = (
+        normalizeNumericValue(b.playCount) * 0.55
+        + normalizeNumericValue(b.likeCount) * 1.25
+        + normalizeNumericValue(b.rating) * 12
+        + Math.max(0, 30 - Math.floor((Date.now() - normalizeTimestamp(b.createdAt)) / 86400000))
+      );
+      return scoreB - scoreA;
+    });
+  }, [filteredGames, sortBy]);
 
   const ribbonTags = useMemo(() => {
     const tags = collectGameTags(allGames);
@@ -207,7 +296,7 @@ export default function Home() {
     });
   };
 
-  const updateSearchFilters = ({ query, tags, matchMode } = {}, shouldScroll = false) => {
+  const updateSearchFilters = ({ query, tags, matchMode, sort, maxMinutes: nextMaxMinutes } = {}, shouldScroll = false) => {
     const normalizedQuery = normalizeSearchValue(query ?? searchQuery);
     const normalizedTags = Array.from(
       new Set(
@@ -217,6 +306,8 @@ export default function Home() {
       )
     ).slice(0, 12);
     const normalizedMatchMode = matchMode === 'any' ? 'any' : 'all';
+    const normalizedSort = normalizeSortValue(typeof sort === 'string' ? sort : sortBy);
+    const normalizedMaxMinutes = parsePositiveMinutes(nextMaxMinutes ?? maxMinutes);
 
     const nextSearchParams = new URLSearchParams(searchParams);
     if (normalizedQuery) {
@@ -235,6 +326,18 @@ export default function Home() {
       nextSearchParams.set('match', 'any');
     } else {
       nextSearchParams.delete('match');
+    }
+
+    if (normalizedSort !== 'trending') {
+      nextSearchParams.set('sort', normalizedSort);
+    } else {
+      nextSearchParams.delete('sort');
+    }
+
+    if (normalizedMaxMinutes) {
+      nextSearchParams.set('maxMinutes', String(normalizedMaxMinutes));
+    } else {
+      nextSearchParams.delete('maxMinutes');
     }
 
     nextSearchParams.delete('tag');
@@ -270,7 +373,7 @@ export default function Home() {
   };
 
   const clearAllFilters = () => {
-    updateSearchFilters({ query: '', tags: [], matchMode: 'all' }, false);
+    updateSearchFilters({ query: '', tags: [], matchMode: 'all', maxMinutes: null, sort: 'trending' }, false);
   };
 
   const handleMatchModeChange = (mode) => {
@@ -278,12 +381,63 @@ export default function Home() {
     updateSearchFilters({ matchMode: mode }, false);
   };
 
-  const hasAnyFilter = Boolean(searchQuery) || selectedTags.length > 0;
+  const handleSortChange = (event) => {
+    updateSearchFilters({ sort: event.target.value }, false);
+  };
+
+  useEffect(() => {
+    if (hasRestoredFiltersRef.current) return;
+    hasRestoredFiltersRef.current = true;
+    const hasManagedQuery = ['q', 'tags', 'tag', 'match', 'sort', 'maxMinutes'].some((key) => searchParams.get(key));
+    if (hasManagedQuery) return;
+
+    try {
+      const raw = localStorage.getItem(FILTER_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return;
+
+      const nextParams = new URLSearchParams();
+      const restoredQuery = normalizeSearchValue(parsed.q || '');
+      const restoredTags = Array.isArray(parsed.tags)
+        ? parsed.tags.map((tag) => normalizeTagValue(tag)).filter(Boolean).slice(0, 12)
+        : [];
+      const restoredMatch = parsed.match === 'any' ? 'any' : 'all';
+      const restoredSort = normalizeSortValue(parsed.sort);
+      const restoredMaxMinutes = parsePositiveMinutes(parsed.maxMinutes);
+
+      if (restoredQuery) nextParams.set('q', restoredQuery);
+      if (restoredTags.length > 0) nextParams.set('tags', restoredTags.join(','));
+      if (restoredTags.length > 1 && restoredMatch === 'any') nextParams.set('match', 'any');
+      if (restoredSort !== 'trending') nextParams.set('sort', restoredSort);
+      if (restoredMaxMinutes) nextParams.set('maxMinutes', String(restoredMaxMinutes));
+
+      if (Array.from(nextParams.keys()).length > 0) {
+        setSearchParams(nextParams, { replace: true });
+      }
+    } catch {
+      localStorage.removeItem(FILTER_STORAGE_KEY);
+    }
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    const payload = {
+      q: searchQuery,
+      tags: selectedTags,
+      match: tagMatchMode,
+      sort: sortBy,
+      maxMinutes
+    };
+    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(payload));
+  }, [searchQuery, selectedTags, tagMatchMode, sortBy, maxMinutes]);
+
+  const hasAnyFilter = Boolean(searchQuery) || selectedTags.length > 0 || Boolean(maxMinutes);
   const noResultsFilterMessage = [
     searchQuery ? t('home.noResults.name', { query: searchQuery }) : '',
     selectedTags.length > 0
       ? t('home.noResults.tags', { mode: tagMatchMode === 'any' ? 'any' : 'all', tags: selectedTags.map((tag) => `#${tag}`).join(', ') })
-      : ''
+      : '',
+    maxMinutes ? `≤ ${maxMinutes} min` : ''
   ]
     .filter(Boolean)
     .join(' • ');
@@ -918,6 +1072,15 @@ export default function Home() {
                   #{tag} ×
                 </button>
               ))}
+              {maxMinutes && (
+                <button
+                  type="button"
+                  onClick={() => updateSearchFilters({ maxMinutes: null }, false)}
+                  className="px-3 py-1.5 rounded-full border border-sky-300/45 bg-sky-300/20 text-sky-50 text-xs font-bold uppercase tracking-[0.1em] hover:bg-sky-200/30 transition-colors"
+                >
+                  time: ≤ {maxMinutes} min ×
+                </button>
+              )}
             </div>
           )}
 
@@ -954,6 +1117,19 @@ export default function Home() {
                   ? t('home.search.matchAnyHelp')
                   : t('home.search.currentMode', { mode: tagMatchMode.toUpperCase() })}
               </p>
+            </div>
+
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-zinc-500">{t('home.search.sortLabel', { defaultValue: 'Sort' })}</span>
+              <select
+                value={sortBy}
+                onChange={handleSortChange}
+                className="rounded-xl border border-white/12 bg-zinc-950/70 px-3 py-2 text-xs font-bold uppercase tracking-[0.08em] text-zinc-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30"
+              >
+                <option value="trending">{t('home.search.sortTrending', { defaultValue: 'Trending' })}</option>
+                <option value="mostPlayed">{t('home.search.sortMostPlayed', { defaultValue: 'Most Played' })}</option>
+                <option value="new">{t('home.search.sortNew', { defaultValue: 'New' })}</option>
+              </select>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -1007,9 +1183,9 @@ export default function Home() {
         
         {loading ? (
           <div className="text-center py-20 text-zinc-500 animate-fade-in">{t('home.states.loadingGames')}</div>
-        ) : filteredGames.length > 0 ? (
+        ) : sortedFilteredGames.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-5">
-            {filteredGames.map((game, index) => (
+            {sortedFilteredGames.map((game, index) => (
               <GameCard 
                 key={game.id} 
                 game={game} 

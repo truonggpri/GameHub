@@ -84,6 +84,27 @@ export default function Profile() {
   const [reviewSort, setReviewSort] = useState('newest');
   const [visibleReviews, setVisibleReviews] = useState(6);
 
+  const normalizeGameNameLocalized = useCallback((value) => {
+    if (!value) return t('profile.unknownGame');
+    if (/^[a-f0-9]{24}$/i.test(value)) return t('profile.gameNumber', { number: value.slice(-6) });
+    return value.replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+  }, [t]);
+
+  const formatRelativeTimeLocalized = useCallback((value) => {
+    if (!value) return t('profile.justNow');
+    const timestamp = new Date(value).getTime();
+    if (Number.isNaN(timestamp)) return t('profile.justNow');
+    const diffMs = Date.now() - timestamp;
+    const diffMinutes = Math.floor(diffMs / 60000);
+    if (diffMinutes < 1) return t('profile.justNow');
+    if (diffMinutes < 60) return t('profile.minutesAgo', { count: diffMinutes });
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return t('profile.hoursAgo', { count: diffHours });
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 30) return t('profile.daysAgo', { count: diffDays });
+    return new Date(value).toLocaleDateString();
+  }, [t]);
+
   const favorites = Array.isArray(user?.favorites) ? user.favorites : [];
 
   const gameLookup = useMemo(() => {
@@ -322,27 +343,6 @@ export default function Profile() {
     if (playerLevel >= 5) return t('profile.silverRaider');
     return t('profile.rookie');
   }, [playerLevel, t]);
-
-  const normalizeGameNameLocalized = useCallback((value) => {
-    if (!value) return t('profile.unknownGame');
-    if (/^[a-f0-9]{24}$/i.test(value)) return t('profile.gameNumber', { number: value.slice(-6) });
-    return value.replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
-  }, [t]);
-
-  const formatRelativeTimeLocalized = useCallback((value) => {
-    if (!value) return t('profile.justNow');
-    const timestamp = new Date(value).getTime();
-    if (Number.isNaN(timestamp)) return t('profile.justNow');
-    const diffMs = Date.now() - timestamp;
-    const diffMinutes = Math.floor(diffMs / 60000);
-    if (diffMinutes < 1) return t('profile.justNow');
-    if (diffMinutes < 60) return t('profile.minutesAgo', { count: diffMinutes });
-    const diffHours = Math.floor(diffMinutes / 60);
-    if (diffHours < 24) return t('profile.hoursAgo', { count: diffHours });
-    const diffDays = Math.floor(diffHours / 24);
-    if (diffDays < 30) return t('profile.daysAgo', { count: diffDays });
-    return new Date(value).toLocaleDateString();
-  }, [t]);
 
   const getGameLink = (gameId) => {
     if (!gameId) return '/';

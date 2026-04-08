@@ -4,12 +4,26 @@ const Score = require('../models/Score');
 const Game = require('../models/Game');
 const jwt = require('jsonwebtoken');
 
+const resolveAuthUserId = (decoded) => {
+  if (!decoded || typeof decoded !== 'object') return '';
+  const directId = typeof decoded.id === 'string' ? decoded.id.trim() : '';
+  if (directId) return directId;
+  const nestedId = typeof decoded.user?.id === 'string' ? decoded.user.id.trim() : '';
+  if (nestedId) return nestedId;
+  const legacyId = typeof decoded._id === 'string' ? decoded._id.trim() : '';
+  return legacyId;
+};
+
 const auth = (req, res, next) => {
   const token = req.header('Authorization')?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ message: 'No token' });
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+    const userId = resolveAuthUserId(decoded);
+    if (!userId) {
+      return res.status(401).json({ message: 'Token invalid' });
+    }
+    req.user = { id: userId };
     next();
   } catch (e) {
     res.status(400).json({ message: 'Token invalid' });

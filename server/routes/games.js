@@ -7,6 +7,16 @@ const GameComment = require('../models/GameComment');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 
+const resolveAuthUserId = (decoded) => {
+  if (!decoded || typeof decoded !== 'object') return '';
+  const directId = typeof decoded.id === 'string' ? decoded.id.trim() : '';
+  if (directId) return directId;
+  const nestedId = typeof decoded.user?.id === 'string' ? decoded.user.id.trim() : '';
+  if (nestedId) return nestedId;
+  const legacyId = typeof decoded._id === 'string' ? decoded._id.trim() : '';
+  return legacyId;
+};
+
 const normalizeUrl = (value) => {
   if (typeof value !== 'string') return '';
   return value.trim().replace(/^`+|`+$/g, '').replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '');
@@ -193,8 +203,9 @@ const getAuthorizedUser = async (req) => {
   if (!token) return null;
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (!decoded?.id) return null;
-    const user = await User.findOne({ _id: decoded.id, deletedAt: null })
+    const userId = resolveAuthUserId(decoded);
+    if (!userId) return null;
+    const user = await User.findOne({ _id: userId, deletedAt: null })
       .select('_id role isAdmin vipTier vipExpiresAt deletedAt')
       .lean();
     if (!user || user.deletedAt) return null;
@@ -322,7 +333,11 @@ const auth = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+    const userId = resolveAuthUserId(decoded);
+    if (!userId) {
+      return res.status(401).json({ message: 'Token is not valid' });
+    }
+    req.user = { id: userId };
     next();
   } catch (e) {
     res.status(400).json({ message: 'Token is not valid' });
@@ -335,7 +350,11 @@ const requireModOrAdmin = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select('_id role isAdmin deletedAt');
+    const userId = resolveAuthUserId(decoded);
+    if (!userId) {
+      return res.status(401).json({ message: 'Token is not valid' });
+    }
+    const user = await User.findById(userId).select('_id role isAdmin deletedAt');
     const role = resolveRole(user);
     if (!user || user.deletedAt || !['admin', 'mod'].includes(role)) {
       return res.status(403).json({ message: 'Admin or Mod access required' });

@@ -54,7 +54,7 @@ export default function AdminPanel() {
   const { user, loading } = useAuth();
   const { refreshCustomGames } = useCustomGames();
   const { t } = useTranslation();
-  const [stats, setStats] = useState({ users: 0, games: 0, scores: 0, customGames: 0, mods: 0 });
+  const [stats, setStats] = useState({ users: 0, games: 0, scores: 0, customGames: 0, mods: 0, visits: null });
   const [users, setUsers] = useState([]);
   const [games, setGames] = useState([]);
   const [activeTab, setActiveTab] = useState('games');
@@ -133,7 +133,8 @@ export default function AdminPanel() {
           games: nextGames.length,
           scores: 0,
           customGames: nextGames.filter((item) => item?.isCustom).length,
-          mods
+          mods,
+          visits: null
         });
       }
     } catch (err) {
@@ -529,12 +530,19 @@ export default function AdminPanel() {
 
   const adminCount = users.filter((u) => u.role === 'admin').length;
   const modCount = users.filter((u) => u.role === 'mod').length;
+  const visitsValue = Number.isFinite(Number(stats.visits)) ? Number(stats.visits) : null;
+  const visitsLabel = visitsValue === null
+    ? '—'
+    : visitsValue >= 1000
+      ? `${(visitsValue / 1000).toFixed(visitsValue >= 10000 ? 0 : 1)}k`
+      : String(visitsValue);
 
   const statCards = [
     { label: 'Total Users', value: stats.users, icon: '👥', color: 'from-blue-500/20 to-cyan-500/20', border: 'border-cyan-500/20', accent: 'text-cyan-400' },
     { label: 'Total Games', value: stats.games, icon: '🎮', color: 'from-purple-500/20 to-pink-500/20', border: 'border-purple-500/20', accent: 'text-purple-400' },
     { label: 'Total Scores', value: stats.scores, icon: '🏆', color: 'from-amber-500/20 to-orange-500/20', border: 'border-amber-500/20', accent: 'text-amber-400' },
     { label: 'Moderators', value: stats.mods || modCount, icon: '🛡️', color: 'from-emerald-500/20 to-teal-500/20', border: 'border-emerald-500/20', accent: 'text-emerald-400' },
+    { label: 'Visits (Vercel)', value: visitsLabel, icon: '📈', color: 'from-fuchsia-500/20 to-indigo-500/20', border: 'border-fuchsia-500/20', accent: 'text-fuchsia-300' },
   ];
 
   const tabs = [
@@ -633,7 +641,7 @@ export default function AdminPanel() {
         )}
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4 mb-8">
           {statCards.map((s, i) => (
             <div
               key={s.label}

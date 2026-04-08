@@ -13,6 +13,96 @@ const normalizeUrl = (value) => {
   return value.trim().replace(/^`+|`+$/g, '').replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '');
 };
 
+const toPositiveInteger = (value) => {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) return null;
+  return Math.round(num);
+};
+
+const pickMetricValue = (value) => {
+  if (value == null) return null;
+  if (typeof value === 'number' || typeof value === 'string') {
+    return toPositiveInteger(value);
+  }
+  if (typeof value === 'object') {
+    return toPositiveInteger(value.value ?? value.count ?? value.total ?? null);
+  }
+  return null;
+};
+
+const extractVisitsFromVercelPayload = (payload) => {
+  const directCandidates = [
+    payload?.visits,
+    payload?.views,
+    payload?.visitors,
+    payload?.value,
+    payload?.total,
+    payload?.totals?.visits,
+    payload?.totals?.views,
+    payload?.totals?.visitors,
+    payload?.totals?.value,
+    payload?.metrics?.visits,
+    payload?.metrics?.views,
+  ];
+
+  for (const candidate of directCandidates) {
+    const value = pickMetricValue(candidate);
+    if (value !== null) return value;
+  }
+
+  if (Array.isArray(payload?.data)) {
+    const sum = payload.data.reduce((acc, item) => {
+      const value = pickMetricValue(
+        item?.visits
+        ?? item?.views
+        ?? item?.visitors
+        ?? item?.value
+        ?? item?.count
+      );
+      return acc + (value ?? 0);
+    }, 0);
+    if (sum > 0) return sum;
+  }
+
+  return null;
+};
+
+const fetchVercelVisits = async () => {
+  const token = process.env.VERCEL_API_TOKEN;
+  const projectId = process.env.VERCEL_PROJECT_ID;
+  if (!token || !projectId) return null;
+
+  const daysRaw = Number(process.env.VERCEL_VISITS_WINDOW_DAYS);
+  const windowDays = Number.isInteger(daysRaw) ? Math.min(Math.max(daysRaw, 1), 365) : 30;
+  const until = new Date();
+  const since = new Date(until.getTime() - windowDays * 24 * 60 * 60 * 1000);
+
+  const endpoint = process.env.VERCEL_ANALYTICS_API_URL || 'https://api.vercel.com/v1/web/insights/stats';
+  const url = new URL(endpoint);
+  url.searchParams.set('projectId', projectId);
+  url.searchParams.set('since', since.toISOString());
+  url.searchParams.set('until', until.toISOString());
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json();
+    return extractVisitsFromVercelPayload(payload);
+  } catch (error) {
+    return null;
+  }
+};
+
 const isValidHttpUrl = (value) => {
   try {
     const parsed = new URL(value);
@@ -146,16 +236,17 @@ const requireModOrAdmin = async (req, res, next) => {
 
 router.get('/stats', requireAdmin, async (req, res) => {
   try {
-    const [users, games, scores, customGames, mods, deletedUsers, deletedGames] = await Promise.all([
+    const [users, games, scores, customGames, mods, deletedUsers, deletedGames, visits] = await Promise.all([
       User.countDocuments({ deletedAt: null }),
       Game.countDocuments({ deletedAt: null }),
       Score.countDocuments(),
       Game.countDocuments({ isCustom: true, deletedAt: null }),
       User.countDocuments({ role: 'mod', deletedAt: null }),
       User.countDocuments({ deletedAt: { $ne: null } }),
-      Game.countDocuments({ deletedAt: { $ne: null } })
+      Game.countDocuments({ deletedAt: { $ne: null } }),
+      fetchVercelVisits()
     ]);
-    res.json({ users, games, scores, customGames, mods, deletedUsers, deletedGames });
+    res.json({ users, games, scores, customGames, mods, deletedUsers, deletedGames, visits });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

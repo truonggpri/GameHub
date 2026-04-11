@@ -1,16 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 
 export default function Membership() {
   const { t } = useTranslation();
-  const { user, loading, getVipPlans, createStripeCheckout } = useAuth();
+  const { user, loading, getVipPlans, createStripeCheckout, verifyStripePayment } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [plans, setPlans] = useState([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [notice, setNotice] = useState({ type: '', message: '' });
   const [buyingPlanId, setBuyingPlanId] = useState('');
+  const handledStripeSessionRef = useRef('');
 
   useEffect(() => {
     let cancelled = false;
@@ -30,6 +33,47 @@ export default function Membership() {
       cancelled = true;
     };
   }, [getVipPlans]);
+
+  useEffect(() => {
+    if (loading || !user) return;
+    const stripeState = typeof searchParams.get('stripe') === 'string' ? searchParams.get('stripe').trim().toLowerCase() : '';
+    const sessionId = typeof searchParams.get('session_id') === 'string' ? searchParams.get('session_id').trim() : '';
+    if (!stripeState) return;
+
+    if (stripeState === 'cancel') {
+      setNotice({ type: 'error', message: t('membership.cancelledMessage') || 'You have cancelled the payment.' });
+      navigate('/membership', { replace: true });
+      return;
+    }
+
+    if (stripeState !== 'success' || !sessionId) {
+      navigate('/membership', { replace: true });
+      return;
+    }
+
+    if (handledStripeSessionRef.current === sessionId) {
+      return;
+    }
+    handledStripeSessionRef.current = sessionId;
+
+    let cancelled = false;
+    const verifyPayment = async () => {
+      setNotice({ type: 'info', message: t('membership.verifyingPayment') || 'Verifying payment...' });
+      const result = await verifyStripePayment(sessionId);
+      if (cancelled) return;
+      if (result.success) {
+        setNotice({ type: 'success', message: result.message || t('membership.paymentSuccess') || 'Payment successful! VIP activated.' });
+      } else {
+        setNotice({ type: 'error', message: result.message || t('membership.paymentFailed') || 'Payment verification failed.' });
+      }
+      navigate('/membership', { replace: true });
+    };
+
+    verifyPayment();
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user, searchParams, verifyStripePayment, t, navigate]);
 
   const vipStatus = useMemo(() => {
     if (!user?.isVip) return t('membership.statusFree');
